@@ -36,7 +36,7 @@ Signing, actual APNs delivery and background receipt on a device await validatio
 
 ## Build and installation
 
-The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub cloud run 43738285480](https://github.com/xiayuqin152/argo-ios/actions/runs/43738285480) completed an unsigned iPhoneOS archive and IPA; [PR #1](https://github.com/xiayuqin152/argo-ios/pull/1) has merged. The added QR, editor and notification changes await a cloud check on the final revision.
+The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) runs the Core tests with the selected Xcode, then creates a Release iPhoneOS archive and unsigned IPA. Open a successful run for its commit, artifacts and logs.
 
 The workflow's **unsigned IPA cannot be installed directly**. Device installation requires an Apple Developer account, a suitable certificate and provisioning profile. Signed IPA, TestFlight and App Store distribution are not configured. See [build instructions and current validation](ios/README.md).
 

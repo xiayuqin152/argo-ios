@@ -36,7 +36,7 @@ argo pair
 
 ## 构建与安装
 
-App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodeproj) 的 `Argo` scheme。[GitHub 云构建 43738285480](https://github.com/xiayuqin152/argo-ios/actions/runs/43738285480)已完成无签名 iPhoneOS archive 和 IPA 打包，[PR #1](https://github.com/xiayuqin152/argo-ios/pull/1) 已合并。新增的扫码、编辑器和通知功能仍待最终修订的云构建验收。
+App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodeproj) 的 `Argo` scheme。[GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 使用所选 Xcode 执行 Core 测试，再生成 Release iPhoneOS archive 和 unsigned IPA。进入成功运行可查看对应提交、产物和日志。
 
 工作流产生的 **unsigned IPA 不能直接安装**。真机安装需要 Apple Developer 账号、适用证书和描述文件；当前未配置已签名 IPA、TestFlight 或 App Store 渠道。构建入口和验收状态见[构建说明](ios/README.md)。
 

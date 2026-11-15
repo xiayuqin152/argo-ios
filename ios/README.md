@@ -6,7 +6,7 @@ App 面向 iOS 26+ 的 iPhone / iPad，使用 Swift 6；产品、target、scheme
 
 [Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml)使用 GitHub 标准 `macos-26` runner、Xcode 26.6 和 XcodeGen 2.46.0，以 jobs=2 运行 ArgoMobileKit Core 测试、生成工程、执行 Release iPhoneOS archive 并打包 unsigned IPA。Core 测试失败会中止后续构建，其日志与 archive 日志一并上传。定义见 [.github/workflows/ios-unsigned.yml](../.github/workflows/ios-unsigned.yml)。
 
-[Run 43738285480](https://github.com/xiayuqin152/argo-ios/actions/runs/43738285480)已成功，[PR #1](https://github.com/xiayuqin152/argo-ios/pull/1)已合入公开基线 `07dee9eb52e93d63f4d301af6dcd9a1a3937f5dd`。进入成功运行的 Artifacts，查看 `Argo-iOS-unsigned-…`，其中包含 unsigned IPA、archive 和日志；当前工作流产物保留 3 天。
+在 [Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 中选择所需提交对应的成功运行。进入 Artifacts，查看 `Argo-iOS-unsigned-…`，其中包含 unsigned IPA、archive 和日志；当前工作流产物保留 3 天。
 
 **无签名 IPA 不能直接安装。** 真机签名需要 Apple Developer 账号、适用证书、App ID 和描述文件。手机提醒还需启用 Push Notifications capability、匹配的 APNs 环境及主机密钥。签名配置尚待准备，当前没有已签名 IPA、TestFlight 或 App Store 安装渠道。
 
@@ -71,7 +71,7 @@ XcodeGen 一致性检查为在 `ios/` 中运行 `./scripts/generate.sh --check`�
 <a id="validation-status"></a>
 ## 当前验收状态
 
-已有一轮无签名 iPhoneOS 云 archive/IPA 成功，历史运行未执行 Core 测试。扫码、全页编辑、Return 发送、主动 PasteButton、会话与通知增量已进入当前源码候选；最终修订须运行包含 Core 测试的新工作流，云编译由后续集成执行。
+云构建先执行现有 Core 测试，再生成 Xcode 工程并运行 Release iPhoneOS archive 和 IPA 打包。扫码、全页编辑、Return 发送、主动 PasteButton、会话与通知代码均参与完整 App 编译；每次结果绑定对应提交，以 Actions 检查、产物和日志为准。
 
 真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。本次文档收口仅核对源码、配置、来源链接和补丁，不执行这些功能验收。
 
