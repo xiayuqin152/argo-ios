@@ -75,4 +75,4 @@ XcodeGen 一致性检查为在 `ios/` 中运行 `./scripts/generate.sh --check`�
 
 真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。本次文档收口仅核对源码、配置、来源链接和补丁，不执行这些功能验收。
 
-许可见根目录 [MIT License](../LICENSE) 与 [UPSTREAM.md](UPSTREAM.md) 所列的实际 Persona、BeautifulUI、Beautiful UI MIT/NOTICE。
+许可见根目录 [MIT License](../LICENSE) 与 [UPSTREAM.md](../UPSTREAM.md) 所列的实际 Persona、BeautifulUI、Beautiful UI MIT/NOTICE。

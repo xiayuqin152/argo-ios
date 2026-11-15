@@ -44,6 +44,6 @@ The workflow's **unsigned IPA cannot be installed directly**. Device installatio
 
 Argo contributions use the [MIT License](LICENSE), © 2026 Argo contributors.
 
-Selected UI, input and pairing components come from [Persona](https://github.com/nwverse/persona), © 2026 nwverse, under its [MIT License](ios/ThirdParty/Persona/LICENSE). [BeautifulUI](ios/ThirdParty/BeautifulUI), © 2026 ChrisPan, retains its [MIT License](ios/ThirdParty/BeautifulUI/LICENSE). Its foundation, [Beautiful UI](https://www.beautifului.dev/), © 2026 Shane Levine, retains its [MIT license](ios/ThirdParty/BeautifulUI/LICENSE-beautifului) and [notice](ios/ThirdParty/BeautifulUI/NOTICE). File provenance is recorded in [ios/UPSTREAM.md](ios/UPSTREAM.md).
+Selected UI, input and pairing components come from [Persona](https://github.com/nwverse/persona), © 2026 nwverse, under its [MIT License](ios/ThirdParty/Persona/LICENSE). [BeautifulUI](ios/ThirdParty/BeautifulUI), © 2026 ChrisPan, retains its [MIT License](ios/ThirdParty/BeautifulUI/LICENSE). Its foundation, [Beautiful UI](https://www.beautifului.dev/), © 2026 Shane Levine, retains its [MIT license](ios/ThirdParty/BeautifulUI/LICENSE-beautifului) and [notice](ios/ThirdParty/BeautifulUI/NOTICE). File provenance is recorded in [UPSTREAM.md](UPSTREAM.md).
 
 The logo and AppIcon reuse the owner's existing Argo brand; the original sources and rebuild instructions remain in [brand sources](docs/branding/SOURCES.md).

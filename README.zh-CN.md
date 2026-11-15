@@ -44,6 +44,6 @@ App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodepr
 
 Argo 新增部分采用根目录 [MIT License](LICENSE)，© 2026 Argo contributors。
 
-相关界面、输入和配对组件改写自 [Persona](https://github.com/nwverse/persona)，© 2026 nwverse，保留其 [MIT License](ios/ThirdParty/Persona/LICENSE)。[BeautifulUI](ios/ThirdParty/BeautifulUI)，© 2026 ChrisPan，保留 [MIT License](ios/ThirdParty/BeautifulUI/LICENSE)；基础设计来自 [Beautiful UI](https://www.beautifului.dev/)，© 2026 Shane Levine，原版 [MIT 许可](ios/ThirdParty/BeautifulUI/LICENSE-beautifului)和 [NOTICE](ios/ThirdParty/BeautifulUI/NOTICE)均保留。逐文件来源见 [ios/UPSTREAM.md](ios/UPSTREAM.md)。
+相关界面、输入和配对组件改写自 [Persona](https://github.com/nwverse/persona)，© 2026 nwverse，保留其 [MIT License](ios/ThirdParty/Persona/LICENSE)。[BeautifulUI](ios/ThirdParty/BeautifulUI)，© 2026 ChrisPan，保留 [MIT License](ios/ThirdParty/BeautifulUI/LICENSE)；基础设计来自 [Beautiful UI](https://www.beautifului.dev/)，© 2026 Shane Levine，原版 [MIT 许可](ios/ThirdParty/BeautifulUI/LICENSE-beautifului)和 [NOTICE](ios/ThirdParty/BeautifulUI/NOTICE)均保留。逐文件来源见 [UPSTREAM.md](UPSTREAM.md)。
 
 Logo 与 AppIcon 沿用所有者既有的 Argo 品牌，原图和重建方式继续见[品牌来源](docs/branding/SOURCES.md)。
