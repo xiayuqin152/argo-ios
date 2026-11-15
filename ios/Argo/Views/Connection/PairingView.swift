@@ -142,7 +142,8 @@ struct PairingView: View {
                     Text("The code is used once. Device credentials are stored in this device's Keychain.")
                 }
             }
-            .themedPage()
+            .scrollContentBackground(.hidden)
+            .background(Theme.pageBackground)
             .navigationTitle("Connect a Host")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
