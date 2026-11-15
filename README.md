@@ -1,32 +1,49 @@
-# Argo for iOS
+# Argo iOS
 
-![Argo](ios/Argo/Resources/Assets.xcassets/ArgoMark.imageset/Argo.png)
+<p align="center">
+  <img src="docs/branding/argo-logo.png" alt="Argo" width="144" height="144">
+</p>
 
-Argo 手机伴侣：在 iPhone 和 iPad 浏览主机上的会话、读取状态并回复，采用 Persona 的界面与输入体验。
-支持配对、managed 会话消息与问题回复、只读 manual 会话、附件及受管预览。完整 iOS 云构建与设备验收仍待完成。
+Argo's companion for iPhone and iPad: follow your coding sessions, read progress and reply from your phone, with selected UI, input and pairing components adapted from Persona.
 
-## 构建
+[简体中文](README.zh-CN.md) · [Build and host requirements](ios/README.md) · [Notifications](docs/phone-notifications.md)
 
-源码保持 `ios/` 布局，包含 ArgoMobileKit 与 BeautifulUI 两个本地包；无需访问私有 loom 仓库。
-`.github/workflows/ios-unsigned.yml` 在 main push、PR 和手动触发时使用 GitHub 标准 macOS runner，
-生成工程并执行 jobs=2 的无签名 iOS archive，保留日志和 xcresult。GitHub 首跑结果尚未取得。
-产生的 unsigned IPA 需要适当重签后才能安装。
+## Sessions and input
 
-Linux 核心检查：
+- Browse paired hosts, workspaces, messages, tool activity and conversation history.
+- Read and reply to connected **managed** sessions, including supported Agent questions. Historical, manual or unattached sessions are read only.
+- See working, waiting, finished and error states. Sending shows the host's delivery or queue receipt; refresh to check an unknown result before sending again.
+- Expand the message field for long text. Return inserts a line break by default; **Settings → Return Key Sends** enables Return to send, with Shift-Return for a line break.
+- Attach photos or files and open managed previews. The system **Paste Image** button imports images when you tap it.
+
+## Pair
+
+On a compatible Argo host, run:
 
 ```sh
-swift test --package-path ios/Packages/ArgoMobileKit --jobs 2
-python3 ios/scripts/check_project.py
+argo pair
 ```
 
-## 配对与会话
+In the app, scan its QR code, tap **Paste Pairing Code**, or enter the complete `argo1:` code. A code is single-use and expires after 10 minutes. Scanning needs camera permission and a supported device; paste and manual entry remain available. Allow local-network access when prompted, and make sure the phone can reach the host.
 
-在支持移动端契约的 Argo 主机生成配对码，在 App 添加主机后选择工作区与会话。
-managed 会话支持读写，manual 会话保持只读。上传状态未知时保留操作证据并手动复核，不自动重发。
-手机提醒能力和最新主线服务端契约尚在整合，当前源码不宣称已具备 APNs 或设备后台提醒验收。
+The host must provide the bounded 1 MiB chat contract. Phone alerts additionally require `PUT/DELETE /api/notify/device`. Verified Argo source master `56b03830908811c8cc1675675bbdd59127303b5f` includes combined backend revision `eba473a09100b11b2f6ea0cf77ab5817f50f6608`. The running service has not been deployed from this source. See the exact [host requirements](ios/README.md#host-compatibility). This repository contains the phone client.
 
-## 来源与许可
+## Phone alerts
 
-Persona/BeautifulUI 来源见 [ios/UPSTREAM.md](ios/UPSTREAM.md)；四份原文许可/notice 位于
-[ios/Argo/Resources/Licenses](ios/Argo/Resources/Licenses)。Argo 共享 Foundation 源已成为仓库内普通文件，
-来源及 hash 见 `ios/Packages/ArgoMobileKit/shared-sources.json`。
+The source candidate includes per-host notification registration and tap-to-open routing. After pairing, select a host and enable **Settings → Notifications → Agent Alerts on This iPhone**. Alerts contain status only. A suitably signed app, notification permission and the host's own APNs setup are required; see [configuration and permissions](docs/phone-notifications.md).
+
+Signing, actual APNs delivery and background receipt on a device await validation. The app reads sessions while in the foreground and reconnects when reopened.
+
+## Build and installation
+
+The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub cloud run 43738285480](https://github.com/xiayuqin152/argo-ios/actions/runs/43738285480) completed an unsigned iPhoneOS archive and IPA; [PR #1](https://github.com/xiayuqin152/argo-ios/pull/1) has merged. The added QR, editor and notification changes await a cloud check on the final revision.
+
+The workflow's **unsigned IPA cannot be installed directly**. Device installation requires an Apple Developer account, a suitable certificate and provisioning profile. Signed IPA, TestFlight and App Store distribution are not configured. See [build instructions and current validation](ios/README.md).
+
+## Credits and licenses
+
+Argo contributions use the [MIT License](LICENSE), © 2026 Argo contributors.
+
+Selected UI, input and pairing components come from [Persona](https://github.com/nwverse/persona), © 2026 nwverse, under its [MIT License](ios/ThirdParty/Persona/LICENSE). [BeautifulUI](ios/ThirdParty/BeautifulUI), © 2026 ChrisPan, retains its [MIT License](ios/ThirdParty/BeautifulUI/LICENSE). Its foundation, [Beautiful UI](https://www.beautifului.dev/), © 2026 Shane Levine, retains its [MIT license](ios/ThirdParty/BeautifulUI/LICENSE-beautifului) and [notice](ios/ThirdParty/BeautifulUI/NOTICE). File provenance is recorded in [ios/UPSTREAM.md](ios/UPSTREAM.md).
+
+The logo and AppIcon reuse the owner's existing Argo brand; the original sources and rebuild instructions remain in [brand sources](docs/branding/SOURCES.md).

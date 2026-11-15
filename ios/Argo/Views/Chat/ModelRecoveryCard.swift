@@ -49,7 +49,7 @@ struct ModelRecoveryCard: View {
                         .buttonStyle(.glassProminent)
                         .disabled(!canSubmit)
                         .accessibilityIdentifier("model-recovery.submit")
-                } else if state.modelRecovery?.needsReviewBeforeNewAction == true {
+                } else if state.modelRecoveryNeedsReviewBeforeNewAction {
                     Text("Review the current card and conversation before starting another model change.")
                         .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
@@ -80,7 +80,7 @@ struct ModelRecoveryCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if operation.refreshing { ProgressView().controlSize(.small) }
-            if operation.needsReviewBeforeNewAction || operation.refreshProblem != nil {
+            if state.modelRecoveryNeedsReviewBeforeNewAction || operation.refreshProblem != nil {
                 Button("Refresh Conversation") { model.refreshModelRecovery() }
                     .disabled(operation.refreshing || !model.status.isConnected)
                     .accessibilityIdentifier("model-recovery.refresh")

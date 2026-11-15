@@ -85,7 +85,7 @@ public actor ArgoHostStore {
         var list = previous.hosts
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         var host: LoomHost
-        let existing = list.firstIndex(where: { $0.address.caseInsensitiveCompare(code.host) == .orderedSame && $0.gatewayPort == code.port })
+        let existing = list.firstIndex(where: { PairingCode.sameHost($0.address, code.host) && $0.gatewayPort == code.port })
         if let i = existing {
             host = list[i]
             host.fingerprint = Base64URL.encode(code.fingerprint)

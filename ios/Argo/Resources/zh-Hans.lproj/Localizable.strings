@@ -53,7 +53,6 @@
 "Version" = "版本";
 "Reconnect and Refresh" = "重新连接并刷新";
 "Connect your computer" = "连接你的电脑";
-"Run argo pair on your computer, then paste the pairing code here." = "在电脑上运行 argo pair，再将配对码粘贴到这里。";
 "Pairing Code" = "配对码";
 "Paste Pairing Code" = "粘贴配对码";
 "The code is used once. Device credentials are stored in this device's Keychain." = "配对码仅使用一次。设备凭据保存在本机钥匙串中。";
@@ -137,6 +136,8 @@
 "Review the current card and conversation before starting another model change." = "请先查看当前卡片与对话，再发起新的换模型操作。";
 "Enter a model ID using only letters, digits and . : / @ [ ] - _, up to 80 characters." = "请输入模型 ID，仅使用字母、数字和 . : / @ [ ] - _，最长 80 个字符。";
 "The host returned no resume receipt." = "主机没有返回续跑回执。";
+"The native conversation is unavailable or does not match this Agent. Refresh again before starting another model change." = "原生会话尚不可用或与此 Agent 不匹配。请再次刷新后再发起换模型操作。";
+"The native conversation changed. Refresh again with the same native identity before starting another model change." = "原生会话已变化。请在另一轮刷新中再次读回同一原生会话，然后再发起换模型操作。";
 
 /* Client errors. Server response bodies remain verbatim. */
 "The connection is closed." = "连接已关闭。";
@@ -330,3 +331,42 @@
 "Copy Path" = "复制路径";
 "Close" = "关闭";
 "Text preview limited to 256 KiB." = "文本预览最多显示 256 KiB。";
+"This file link has no verified source in this message." = "这条消息未提供可核实来源的对应文件，无法打开此链接。";
+
+/* QR and manual host pairing. */
+"Run argo pair on your computer, then scan or paste the pairing code." = "在电脑上运行 argo pair，然后扫描或粘贴配对码。";
+"Pairing code scanner" = "配对码扫描器";
+"Checking camera access" = "正在检查相机权限";
+"Camera access is off. Paste a pairing code or enter it manually." = "未开启相机权限。你可以粘贴配对码或手动输入。";
+"QR scanning is unavailable on this device. Paste a pairing code or enter it manually." = "此设备无法扫描二维码。你可以粘贴配对码或手动输入。";
+"Scan Pairing Code" = "扫描配对码";
+"Scan the QR code printed by argo pair. The code is valid once and expires after 10 minutes." = "扫描 argo pair 显示的二维码。配对码仅能使用一次，10 分钟后过期。";
+"Enter Manually" = "手动输入";
+"Enter the complete argo1: code, including the address, certificate fingerprint and one-time secret." = "输入完整的 argo1: 配对码，包括地址、证书指纹和一次性密钥。";
+"Command line" = "命令行";
+"Expand the message box" = "展开输入框";
+"Edit Message" = "编辑消息";
+"Finish Editing" = "完成编辑";
+"Paste Image" = "粘贴图片";
+"The pasted image could not be read." = "无法读取粘贴的图片。";
+
+/* Persona #8202: opt-in Return sends; IME composition stays in the field. */
+"Return Key Sends" = "按回车发送";
+"Send with Return; Shift-Return starts a new line" = "回车发送，Shift-回车换行";
+
+/* Argo phone notifications */
+"Notifications" = "通知";
+"Agent Alerts on This iPhone" = "在此 iPhone 接收 Agent 提醒";
+"Alerts from the selected host contain status only. Tap an alert to open its Agent." = "所选主机的提醒仅包含状态。轻点提醒打开对应的 Agent。";
+"Retry Notifications" = "重试通知注册";
+"Open iOS Settings" = "打开 iOS 设置";
+"Pair a host to enable Agent alerts." = "配对主机后可开启 Agent 提醒。";
+"Couldn't Open Agent" = "无法打开 Agent";
+"Allow notifications in iOS Settings to receive Agent alerts." = "请在 iOS 设置中允许 Argo 发送通知以接收 Agent 提醒。";
+"Apple could not register this signed app for notifications. Retry when connected." = "Apple 未能为此签名应用注册通知。请在联网后重试。";
+"The notification registration receipt is invalid." = "通知注册回执无效。";
+"The host did not unregister notifications." = "主机尚未注销通知。";
+"Select the paired host and retry notification removal." = "请选择已配对主机并重试注销通知。";
+"The signed app needs an explicit APNs environment and bundle topic." = "签名应用需要明确的 APNs 环境和 bundle topic。";
+"This notification's workspace is no longer available." = "此提醒对应的工作区已不可用。";
+"This notification's Agent is no longer available." = "此提醒对应的 Agent 已不可用。";

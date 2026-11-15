@@ -59,16 +59,25 @@ public struct ArgoFileReference: Codable, Equatable, Hashable, Identifiable, Sen
 
     var retainedByteCount: Int { MemoryLayout<Self>.stride + path.utf8.count + name.utf8.count + origin.utf8.count }
 
-    /// Only local-path links enter the managed downloader. Web links stay web
-    /// links and receive no gateway credential or bearer header.
-    public static func link(_ url: URL) throws -> Self? {
-        guard url.isFileURL || (url.scheme == nil && url.path.hasPrefix("/")) else { return nil }
-        guard url.host == nil || url.host == "" || url.host?.lowercased() == "localhost",
-              url.user == nil, url.password == nil, url.port == nil,
-              url.query == nil, url.fragment == nil, !url.path.hasPrefix("//") else {
+    /// Body links can only select a server-projected reference from this message.
+    /// Never manufacture provenance from provider-cleaned display text. Web links
+    /// stay web links and receive no gateway credential or bearer header.
+    public static func link(_ url: URL, references: [Self]) throws -> Self? {
+        guard url.isFileURL || (url.scheme == nil && url.relativeString.hasPrefix("/")) else { return nil }
+        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.host == nil || parts.host == "" || parts.host?.lowercased() == "localhost",
+              parts.user == nil, parts.password == nil, parts.port == nil,
+              parts.query == nil, parts.fragment == nil,
+              let path = parts.percentEncodedPath.removingPercentEncoding,
+              !path.hasPrefix("//"), ArgoAttachmentPolicy.validPath(path) else {
             throw ArgoClientError.refusedLocally(.message("The file reference is invalid."))
         }
-        return try Self(path: url.path, name: (url.path as NSString).lastPathComponent)
+        // Decode exactly once. POSIX path identity is UTF-8 byte identity, not
+        // Swift String's canonical Unicode equivalence (e.g. NFC versus NFD).
+        guard let reference = references.first(where: { $0.path.utf8.elementsEqual(path.utf8) }) else {
+            throw ArgoClientError.refusedLocally(.message("This file link has no verified source in this message."))
+        }
+        return reference
     }
 }
 

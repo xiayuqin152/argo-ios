@@ -1,5 +1,7 @@
 // Adapted from nwverse/persona apple/Persona/Views/Chat/PromptComposer.swift and
 // apple/Persona/DesignSystem/ShellComposerBar.swift @ 3002eb3 (MIT).
+// Full-page input adapted from the latter @ 89927b54baab6b8207315f6c2a4d2e5831598d45.
+import Foundation
 import SwiftUI
 
 /// The actual iOS Persona shell composer: one field in both the capsule and expanded
@@ -7,47 +9,109 @@ import SwiftUI
 /// Argo uses the same field with its real attachment picker and text queue.
 struct PromptComposer: View {
     let placeholder: String
-    @Binding var text: String
+    @Bindable var input: ComposerInputOwner
     let canSend: Bool
     let sending: Bool
     let showsStop: Bool
     let canStop: Bool
     let stopping: Bool
+    let stopStatus: String?
     let agentName: String
     let send: () -> Void
     let stop: () -> Void
     let canAttach: Bool
     let hasAttachments: Bool
     let attach: () -> Void
+    let paste: ([NSItemProvider]) -> Void
     @State private var selection: TextSelection?
+    @State private var parkedSelection: TextSelection?
+    @State private var pagePresentation = SeenPresentation()
+    @State private var sentFromPage = false
     @FocusState private var focused: Bool
+    @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var text: String { input.text }
+    private var draft: Binding<String> { Binding(get: { input.text }, set: { input.text = $0 }) }
     private var expanded: Bool { focused || !text.isEmpty || hasAttachments }
 
     var body: some View {
+        VStack(spacing: Theme.Space.s) {
+            PasteImageChip(focused: focused && input.acceptsInput, enabled: canAttach, paste: paste)
+            box
+        }
+        .sheet(isPresented: pagePresentation.binding(in: model, conversation: input.state.key), onDismiss: {
+            pagePresentation.didDismiss(in: model)
+            if !sentFromPage && input.acceptsInput { focused = true }
+            sentFromPage = false
+        }) {
+            ComposerPageEditor(placeholder: placeholder, input: input, selection: $selection,
+                               canSend: canSend, sending: sending, showsStop: showsStop,
+                               canStop: canStop, stopping: stopping, hasAttachments: hasAttachments,
+                               canAttach: canAttach, paste: paste,
+                               done: { pagePresentation.requestDismissal() },
+                               send: {
+                                   sentFromPage = true
+                                   send()
+                                   pagePresentation.requestDismissal()
+                               }, stop: stop)
+                .presentationSizing(.page)
+                .presentationDetents([.large])
+        }
+        .onChange(of: input.valid) { _, valid in
+            if !valid { pagePresentation.requestDismissal() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background && pagePresentation.owner == nil {
+                commitMarkedText()
+                input.invalidate()
+            }
+        }
+    }
+
+    private var box: some View {
         ComposerBoxLayout(open: expanded, spacing: Theme.Space.xs,
                           rowGap: Theme.Space.l, rowLeading: Theme.Space.s,
                           rowTrailing: Theme.Space.s, rowBottom: expanded ? Theme.Space.s : 0) {
-            TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
+            TextField(placeholder, text: draft,
+                      selection: pagePresentation.owner == nil ? $selection : $parkedSelection, axis: .vertical)
                 .font(Theme.Font.body)
                 .readingContent()
                 .lineLimit(1...Theme.Shell.composerPhoneMaximumLines)
                 .focused($focused)
+                .returnSends(text: draft, canSend: canSend && input.acceptsInput,
+                             paused: !focused || pagePresentation.owner != nil || !input.acceptsInput) {
+                    commitMarkedText()
+                    send()
+                }
                 .textFieldStyle(.plain)
                 .padding(.leading, Theme.Space.l)
-                .padding(.trailing, expanded ? Theme.Space.l : Theme.Space.xs)
+                .padding(.trailing, expanded ? Theme.Size.tapTarget : Theme.Space.xs)
                 .padding(.vertical, Theme.Space.m)
                 .frame(minHeight: Theme.Size.tapTarget)
                 .accessibilityLabel("Message")
                 .accessibilityIdentifier("message-draft")
+                .overlay(alignment: .topTrailing) {
+                    if expanded {
+                        Button(action: enlarge) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .foregroundStyle(.secondary).tapTargetFrame()
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!input.acceptsInput)
+                        .accessibilityLabel("Expand the message box")
+                        .accessibilityIdentifier("shell-composer-expand")
+                    }
+                }
             HStack(spacing: Theme.Space.xs) {
                 Button {
+                    guard input.acceptsInput else { return }
                     commitMarkedText()
                     focused = false
                     attach()
                 } label: { Image(systemName: "plus").font(Theme.Font.heading).tapTargetFrame() }
-                    .buttonStyle(.plain).disabled(!canAttach).accessibilityLabel("Attach photos or files")
+                    .buttonStyle(.plain).disabled(!canAttach || !input.acceptsInput).accessibilityLabel("Attach photos or files")
                     .accessibilityIdentifier("composer-attach")
                 if expanded && focused {
                     Button { commitMarkedText(); focused = false } label: {
@@ -71,17 +135,18 @@ struct PromptComposer: View {
                 if showsStop && ((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachments) || stopping) {
                     ComposerRoundButton(symbol: Theme.Icon.interrupt, label: L10n.text("Stop Current Turn"),
                                         id: "composer-stop", busy: stopping, pressScales: false, action: stop)
-                        .disabled(!canStop)
+                        .disabled(!canStop || !input.acceptsInput)
                         .opacity(canStop || stopping ? 1 : 0.35)
+                        .accessibilityValue(Text(verbatim: stopStatus ?? ""))
                 } else {
                     ComposerRoundButton(symbol: Theme.Icon.send, label: L10n.text("Send"),
                                         id: "composer-send", busy: sending) {
                         commitMarkedText()
                         send()
                     }
-                    .disabled(!canSend)
+                    .disabled(!canSend || !input.acceptsInput || pagePresentation.owner != nil)
                     .opacity(canSend || sending ? 1 : 0.35)
-                    .keyboardShortcut(focused ? KeyboardShortcut(.return, modifiers: .command) : nil)
+                    .keyboardShortcut(focused && pagePresentation.owner == nil ? KeyboardShortcut(.return, modifiers: .command) : nil)
                 }
             }
         }
@@ -89,10 +154,23 @@ struct PromptComposer: View {
         .padding(.vertical, expanded ? 0 : Theme.Space.xxs)
         .modifier(ComposerSurface())
         .contentShape(.rect(cornerRadius: Theme.Shell.composerRadius))
-        .onTapGesture { focused = true }
+        .onTapGesture { if pagePresentation.owner == nil && input.acceptsInput { focused = true } }
         .animation(reduceMotion ? nil : Theme.Motion.state, value: expanded)
         .animation(reduceMotion ? nil : Theme.Motion.composerGrow, value: text)
     }
 
-    private func commitMarkedText() { if focused { TypedText.commitFocused(into: $text) } }
+    private func enlarge() {
+        guard input.acceptsInput, pagePresentation.owner == nil else { return }
+        if focused { commitMarkedText() }
+        else { selection = TextSelection(insertionPoint: text.endIndex) }
+        sentFromPage = false
+        pagePresentation.setPresented(true, in: model, conversation: input.state.key)
+        focused = false
+    }
+
+    private func commitMarkedText() {
+        if focused && input.canCommit {
+            TypedText.commitFocused(into: Binding(get: { input.text }, set: { input.commit($0) }))
+        }
+    }
 }

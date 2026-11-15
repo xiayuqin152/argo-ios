@@ -5,12 +5,14 @@ import SwiftUI
 struct HostWorkspaceView: View {
     var close: (() -> Void)? = nil
     @Binding var pairingShown: Bool
+    var pairingDismissed: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var hostToForget: LoomHost?
     @State private var confirmingForget = false
     @State private var removingHostID: UUID?
     @State private var removalProblem: String?
+    @State private var pairingPresentation = SeenPresentation()
 
     var body: some View {
         NavigationStack {
@@ -47,13 +49,13 @@ struct HostWorkspaceView: View {
                             .disabled(removingHostID != nil || model.pairing)
                         }
                     }
-                    Button { pairingShown = true } label: { Label("Connect a Host", systemImage: Theme.Icon.add) }
+                    Button { pairingBinding.wrappedValue = true } label: { Label("Connect a Host", systemImage: Theme.Icon.add) }
                         .disabled(removingHostID != nil)
                 }
                 if model.status.needsPairing {
                     Section {
                         Text(verbatim: model.status.problem ?? "").foregroundStyle(.secondary)
-                        Button("Pair Again") { pairingShown = true }
+                        Button("Pair Again") { pairingBinding.wrappedValue = true }
                             .disabled(removingHostID != nil)
                     }
                 }
@@ -95,7 +97,10 @@ struct HostWorkspaceView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: finish) } }
         }
-        .sheet(isPresented: $pairingShown) { PairingView() }
+        .sheet(isPresented: pairingBinding, onDismiss: {
+            pairingPresentation.didDismiss(in: model)
+            pairingDismissed()
+        }) { PairingView() }
         .confirmationDialog("Forget Host?", isPresented: $confirmingForget,
                             titleVisibility: .visible, presenting: hostToForget) { host in
             Button("Forget Host", role: .destructive) {
@@ -118,6 +123,13 @@ struct HostWorkspaceView: View {
         } message: {
             Text(verbatim: removalProblem ?? "")
         }
+    }
+
+    private var pairingBinding: Binding<Bool> {
+        Binding(get: { pairingShown }, set: { shown in
+            pairingPresentation.setPresented(shown, in: model)
+            pairingShown = pairingPresentation.isPresented
+        })
     }
 
     private func workspaceRow(_ workspace: ArgoWorkspace) -> some View {

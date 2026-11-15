@@ -39,6 +39,13 @@ jobs:
             xcrun --sdk iphoneos --show-sdk-version
           } 2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/toolchain.log"
 
+      - name: Run ArgoMobileKit core tests
+        run: |
+          set -euo pipefail
+          xcrun swift test --package-path ios/Packages/ArgoMobileKit \
+            --scratch-path "$RUNNER_TEMP/argo-ios/core-tests" --jobs 2 \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/core-tests.log"
+
       - name: Prepare XcodeGen 2.46.0
         run: |
           set -euo pipefail

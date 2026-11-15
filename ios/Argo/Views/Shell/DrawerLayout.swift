@@ -8,6 +8,7 @@ import UIKit
 struct PersonaDrawerLayout<Sidebar: View, Page: View>: View {
     @Binding var isPresented: Bool
     var enabled: Bool
+    var onCover: () -> Void
     @ViewBuilder var sidebar: Sidebar
     @ViewBuilder var page: Page
     @GestureState private var drag: CGFloat = 0
@@ -55,6 +56,10 @@ struct PersonaDrawerLayout<Sidebar: View, Page: View>: View {
             .onChange(of: isPresented) { _, shown in
                 if shown { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             }
+            .onChange(of: drag) { before, after in
+                // Gesture cancellation also resets @GestureState, without onEnded.
+                if before != 0, after == 0, !isPresented { isPresented = false }
+            }
         }
     }
 
@@ -70,6 +75,7 @@ struct PersonaDrawerLayout<Sidebar: View, Page: View>: View {
         DragGesture(minimumDistance: Theme.Space.l)
             .updating($drag) { value, state, transaction in
                 guard accepts(value) else { return }
+                onCover()
                 transaction.disablesAnimations = true
                 state = value.translation.width
             }

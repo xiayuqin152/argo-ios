@@ -20,7 +20,7 @@ public struct GatewayEndpoint: Equatable, Sendable {
     public init(_ host: LoomHost) throws {
         try host.validate()
         guard let print = host.fingerprintData else { throw GatewayError.fingerprintChanged }
-        self.init(host: host.address, port: host.gatewayPort, fingerprint: print)
+        self.init(host: PairingCode.normalizedHost(host.address), port: host.gatewayPort, fingerprint: print)
     }
 
     public init(_ code: PairingCode) {

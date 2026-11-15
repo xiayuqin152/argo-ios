@@ -282,28 +282,41 @@ final class NewSessionModel {
         problem = nil
     }
 
-    func observed(_ cards: [ArgoAgentCard], host: UUID, workspace: String) {
+    /// Return only keys whose captured terminal positively ended or changed
+    /// owner. Missing cards/terminals keep a receipt waiting for list takeover.
+    func observed(_ cards: [ArgoAgentCard], terminals: [ArgoTerminalView], host: UUID, workspace: String) -> Set<SessionKey> {
+        var retired: Set<SessionKey> = []
         let remaining = pending.filter { intent in
             guard intent.host == host, intent.workspace == workspace, let key = intent.key else { return true }
+            guard let terminal = terminals.first(where: {
+                $0.id == key.terminal && $0.ws == key.workspace && $0.context == intent.context && $0.cwd == intent.cwd
+            }) else { return true }
+            if terminal.alive == false || (terminal.alive == true && (terminal.agent == nil ||
+                terminal.agent.map { ArgoRun.isManaged($0.run) && $0.run != key.run } == true)) {
+                retired.insert(key)
+                return false
+            }
             return !cards.contains { $0.ws == key.workspace && $0.run == key.run && $0.terminal == key.terminal }
         }
-        guard remaining.count != pending.count else { return }
+        guard remaining.count != pending.count else { return retired }
         let finishedCurrent = currentContext != nil && !remaining.contains { $0.context == currentContext }
+        pending = remaining
+        if finishedCurrent { currentContext = nil; draft.prompt = "" }
         do {
             try store.save(remaining)
-            pending = remaining
-            if finishedCurrent { currentContext = nil; draft.prompt = "" }
         } catch { storageProblem = L10n.error(error) }
+        return retired
     }
 
-    func terminalGone(_ key: SessionKey) {
+    func terminalGone(_ key: SessionKey) -> Bool {
         let remaining = pending.filter { $0.key != key }
-        guard remaining.count != pending.count else { return }
+        guard remaining.count != pending.count else { return false }
+        pending = remaining
+        if current == nil { currentContext = nil; draft.prompt = "" }
         do {
             try store.save(remaining)
-            pending = remaining
-            if current == nil { currentContext = nil }
         } catch { storageProblem = L10n.error(error) }
+        return true
     }
 
     func forgetHost(_ host: UUID) {

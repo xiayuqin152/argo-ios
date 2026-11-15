@@ -257,6 +257,7 @@ final class ConversationState {
         queue = nil
         displayedQuestionIDs.removeAll()
         seenSignature = nil
+        invalidateModelRecoveryNativeReview()
         modelRecoveryProblem = nil
     }
 }

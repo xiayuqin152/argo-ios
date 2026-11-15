@@ -1,6 +1,8 @@
 // Adapted from nwverse/persona apple/Persona/Views/Settings/SettingsView.swift @ 3002eb3 (MIT).
 // Retains the system-label rows and device/connection grouping for Argo's local settings.
 import SwiftUI
+import UIKit
+import UserNotifications
 
 nonisolated enum AppAppearance: String {
     case system, light, dark
@@ -18,8 +20,10 @@ nonisolated enum AppAppearance: String {
 
 struct SettingsView: View {
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system
+    @AppStorage(ReturnSends.enabledKey) private var returnSends = false
     @Environment(\.dismiss) private var dismiss
-    @State private var hostsShown = false
+    @Environment(AppModel.self) private var model
+    @State private var hostsPresentation = SeenPresentation()
     @State private var hostPairingShown = false
 
     var body: some View {
@@ -35,13 +39,38 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.navigationLink)
                     .accessibilityIdentifier("settings-appearance")
+                    Toggle(isOn: $returnSends) {
+                        Label("Return Key Sends", systemImage: "arrow.turn.down.left")
+                    }
+                    .accessibilityHint(Text("Send with Return; Shift-Return starts a new line"))
+                    .accessibilityIdentifier("settings-return-sends")
                 }
                 Section("Connection") {
-                    Button { hostsShown = true } label: {
+                    Button { hostsPresentation.setPresented(true, in: model) } label: {
                         Label("Hosts and Workspaces", systemImage: Theme.Icon.connection)
                     }
                     .foregroundStyle(.primary)
                     .accessibilityIdentifier("settings-hosts-workspaces")
+                }
+                Section("Notifications") {
+                    if let host = model.selectedHost {
+                        Toggle("Agent Alerts on This iPhone", isOn: Binding(
+                            get: { PhoneNotifications.shared.enabledHosts.contains(host.id) },
+                            set: { value in Task { await PhoneNotifications.shared.setEnabled(value, host: host) } }))
+                            .disabled(PhoneNotifications.shared.busy)
+                            .accessibilityIdentifier("settings-phone-notifications")
+                        Text("Alerts from the selected host contain status only. Tap an alert to open its Agent.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Text("Pair a host to enable Agent alerts.").foregroundStyle(.secondary)
+                    }
+                    if let problem = PhoneNotifications.shared.problem(for: model.selectedHost?.id) {
+                        Text(verbatim: problem).font(.footnote).foregroundStyle(.secondary)
+                        Button("Retry Notifications") { Task { await PhoneNotifications.shared.refresh() } }
+                    }
+                    if PhoneNotifications.shared.authorization == .denied {
+                        Link("Open iOS Settings", destination: URL(string: UIApplication.openSettingsURLString)!)
+                    }
                 }
                 Section("About") {
                     LabeledContent("Version") {
@@ -66,7 +95,10 @@ struct SettingsView: View {
             }
         }
         .readingContent()
-        .sheet(isPresented: $hostsShown) { HostWorkspaceView(pairingShown: $hostPairingShown) }
+        .sheet(isPresented: hostsPresentation.binding(in: model),
+               onDismiss: { hostsPresentation.didDismiss(in: model) }) {
+            HostWorkspaceView(pairingShown: $hostPairingShown, pairingDismissed: {})
+        }
     }
 
     private var appVersion: String {

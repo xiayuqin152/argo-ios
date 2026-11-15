@@ -24,6 +24,7 @@ struct NewChatView: View {
                         if previous.contains(where: { $0.receipt == nil }) {
                             Text("A previous result remains unknown. Starting another Agent creates a separate session.")
                                 .font(Theme.Font.caption).foregroundStyle(.secondary)
+                                .readingContent()
                         }
                         ForEach(previous) { intent in
                             Button { launch.review(intent) } label: {
@@ -128,6 +129,7 @@ struct NewChatView: View {
                 if let reason = launch.selectedProfile?.fixedPermission, !reason.isEmpty {
                     Label(reason, systemImage: "lock.fill")
                         .font(Theme.Font.caption).foregroundStyle(.secondary)
+                        .readingContent()
                         .accessibilityIdentifier("newChat.fixedPermission")
                 }
             } header: { Text("Permissions") } footer: {
@@ -135,6 +137,7 @@ struct NewChatView: View {
             }
             Section {
                 TextField(L10n.text("What should this Agent do?"), text: $launch.draft.prompt, axis: .vertical)
+                    .readingContent()
                     .lineLimit(5...12)
                     .focused($promptFocused)
                     .accessibilityLabel("First Message")
@@ -159,10 +162,13 @@ struct NewChatView: View {
                             else if !profile.supported { Text("This engine is not supported for mobile creation").font(Theme.Font.caption) }
                         }
                         Spacer()
-                        if launch.draft.profile == profile.name { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+                        if launch.draft.profile == profile.name {
+                            Image(systemName: "checkmark").foregroundStyle(Theme.accent).accessibilityHidden(true)
+                        }
                     }
                 }
                 .disabled(!profile.canLaunch || !launch.canEdit)
+                .accessibilityAddTraits(launch.draft.profile == profile.name ? .isSelected : [])
             }
             Button("Refresh Launchers") { model.refreshLaunchProfiles() }
                 .disabled(launch.profilesLoading || !model.status.isConnected)
@@ -180,6 +186,7 @@ struct NewChatView: View {
                 Button("Open Agent") { model.openCreation(intent) }
             } else if launch.busyContext != intent.context {
                 Text("The previous creation may have reached the host. Check this intent before deciding to start another Agent.")
+                    .readingContent()
                 Button("Check Creation Result") { model.checkCreation(intent) }
                     .disabled(!model.status.isConnected || launch.checking.contains(intent.context))
                 if let matches = launch.candidates[intent.context], matches.count > 1 {
@@ -241,6 +248,7 @@ struct NewChatView: View {
     private func statusCard(_ text: String, error: Bool) -> some View {
         Label(text, systemImage: error ? Theme.Icon.errorFilled : Theme.Icon.info)
             .font(Theme.Font.caption).foregroundStyle(error ? Theme.danger : Color.secondary)
+            .readingContent()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Theme.Space.m)
             .background(.regularMaterial, in: .rect(cornerRadius: Theme.Radius.card))

@@ -6,11 +6,13 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var systemTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var hostsShown = false
-    @State private var pairingShown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hostsPresentation = SeenPresentation()
+    @State private var pairingPresentation = SeenPresentation()
     @State private var hostPairingShown = false
     @State private var pairingSizeClass: UserInterfaceSizeClass?
-    @State private var settingsShown = false
+    @State private var settingsPresentation = SeenPresentation()
+    private var notifications: PhoneNotifications { .shared }
 
     var body: some View {
         @Bindable var model = model
@@ -27,14 +29,16 @@ struct RootView: View {
                 welcome
             } else {
                 if compactHosts {
-                    PersonaDrawerLayout(isPresented: $hostsShown, enabled: model.selectedKey == nil) {
-                        HostWorkspaceView(close: { hostsShown = false }, pairingShown: $hostPairingShown)
+                    PersonaDrawerLayout(isPresented: hostsBinding, enabled: model.selectedKey == nil,
+                                        onCover: { hostsPresentation.cover(in: model) }) {
+                        HostWorkspaceView(close: { hostsBinding.wrappedValue = false }, pairingShown: $hostPairingShown,
+                                          pairingDismissed: { pairingSizeClass = nil })
                     } page: {
                         navigation
                     }
                 } else {
-                    navigation.sheet(isPresented: $hostsShown) {
-                        HostWorkspaceView(pairingShown: $hostPairingShown)
+                    navigation.sheet(isPresented: hostsBinding, onDismiss: { hostsPresentation.didDismiss(in: model) }) {
+                        HostWorkspaceView(pairingShown: $hostPairingShown, pairingDismissed: { pairingSizeClass = nil })
                     }
                 }
             }
@@ -42,14 +46,44 @@ struct RootView: View {
         .background(Theme.pageBackground)
         .environment(\.readingTypeSize, systemTypeSize)
         .dynamicTypeSize(Theme.interfaceTypeSize(systemTypeSize))
-        .sheet(isPresented: $pairingShown) { PairingView() }
-        .sheet(isPresented: $model.newSessionShown) { NewChatView() }
-        .sheet(isPresented: $settingsShown) { SettingsView() }
-        .task { await model.loadHosts() }
-        .onChange(of: scenePhase, initial: true) { _, phase in model.setActive(phase == .active) }
-        .onChange(of: hostPairingShown) { _, shown in
-            pairingSizeClass = shown ? horizontalSizeClass : nil
+        .sheet(isPresented: pairingPresentation.binding(in: model),
+               onDismiss: { pairingPresentation.didDismiss(in: model) }) { PairingView() }
+        .sheet(isPresented: $model.newSessionShown,
+               onDismiss: { model.newSessionPresentation.didDismiss(in: model) }) { NewChatView() }
+        .sheet(isPresented: settingsPresentation.binding(in: model),
+               onDismiss: { settingsPresentation.didDismiss(in: model) }) { SettingsView() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let problem = model.notificationProblem {
+                NoticeBanner(text: problem, tone: .caution, lineLimit: nil) {
+                    Button("Close") { model.notificationProblem = nil }
+                }
+                .padding(Theme.Space.l)
+            }
         }
+        .task { await model.loadHosts() }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            model.setActive(phase == .active)
+            if phase == .active { Task { await notifications.refresh() } }
+        }
+        .onChange(of: model.hosts) { _, hosts in
+            notifications.hostsChanged(hosts)
+            openNotification()
+        }
+        .onChange(of: model.loadingHosts) { _, loading in if !loading { openNotification() } }
+        .onChange(of: notifications.pendingRoute) { _, _ in openNotification() }
+        .onChange(of: hostPairingShown) { _, shown in
+            if shown { pairingSizeClass = horizontalSizeClass }
+        }
+    }
+
+    private func openNotification() {
+        guard !model.loadingHosts, let route = notifications.takeRoute(hosts: model.hosts) else { return }
+        hostsBinding.wrappedValue = false
+        pairingPresentation.requestDismissal()
+        settingsPresentation.requestDismissal()
+        hostPairingShown = false
+        model.newSessionShown = false
+        model.openNotification(route)
     }
 
     private var compactHosts: Bool {
@@ -57,9 +91,23 @@ struct RootView: View {
         (pairingSizeClass ?? horizontalSizeClass) == .compact
     }
 
+    private var hostsBinding: Binding<Bool> {
+        Binding(get: { hostsPresentation.isPresented }, set: { shown in
+            if !shown, compactHosts {
+                let owner = hostsPresentation.owner
+                withAnimation(reduceMotion ? nil : Theme.Motion.drawer, completionCriteria: .removed) {
+                    hostsPresentation.setPresented(false, in: model)
+                } completion: {
+                    if !hostsPresentation.isPresented { hostsPresentation.didDismiss(owner, in: model) }
+                }
+            } else { hostsPresentation.setPresented(shown, in: model) }
+        })
+    }
+
     private var navigation: some View {
         NavigationSplitView {
-            ChatsView(openHosts: { hostsShown = true }, openSettings: { settingsShown = true })
+            ChatsView(openHosts: { hostsBinding.wrappedValue = true },
+                      openSettings: { settingsPresentation.setPresented(true, in: model) })
                 .navigationSplitViewColumnWidth(min: Theme.Size.sidebarMin,
                                                 ideal: Theme.Size.sidebar, max: Theme.Size.sidebarMax)
         } detail: {
@@ -72,7 +120,7 @@ struct RootView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .safeAreaInset(edge: .top, spacing: 0) {
-            ConnectionBanner(pair: { pairingShown = true })
+            ConnectionBanner(pair: { pairingPresentation.setPresented(true, in: model) })
         }
     }
 
@@ -90,14 +138,14 @@ struct RootView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            Button { pairingShown = true } label: {
+            Button { pairingPresentation.setPresented(true, in: model) } label: {
                 Label("Connect a Host", systemImage: Theme.Icon.add)
                     .padding(.horizontal, Theme.Space.l)
                     .tapTargetHeight()
             }
             .buttonStyle(.glassProminent)
             .accessibilityIdentifier("connect-host")
-            Button { settingsShown = true } label: {
+            Button { settingsPresentation.setPresented(true, in: model) } label: {
                 Label("Settings", systemImage: "gearshape").tapTargetHeight()
             }
             .accessibilityIdentifier("open-settings")

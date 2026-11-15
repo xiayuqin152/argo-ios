@@ -67,6 +67,82 @@ final class ArgoHostStoreTests: XCTestCase {
         XCTAssertEqual(count, 2)
     }
 
+    func testRepairDNSCaseKeepsIdentity() async throws {
+        let tokens = InMemoryDeviceTokens()
+        let s = store(tokens: tokens) { _, _ in GatewayCredential(device: "dev", token: Fixture.token) }
+        let first = try await s.pair(code: Fixture.code(host: "DevBox.Example"), deviceName: "p")
+        let same = try await s.pair(code: Fixture.code(host: "devbox.example"), deviceName: "p")
+        XCTAssertEqual(same.id, first.id)
+        let saved = try await s.hosts()
+        XCTAssertEqual(saved, [first])
+    }
+
+    func testRepairInternationalizedDNSKeepsALabelIdentity() async throws {
+        let tokens = InMemoryDeviceTokens()
+        let s = store(tokens: tokens) { _, _ in GatewayCredential(device: "dev", token: Fixture.token) }
+        let first = try await s.pair(code: Fixture.code(host: "例子.测试"), deviceName: "p")
+        let same = try await s.pair(code: Fixture.code(host: "XN--FSQU00A.XN--0ZWM56D"), deviceName: "p")
+        XCTAssertEqual(same.id, first.id)
+        XCTAssertEqual(same.address, "xn--fsqu00a.xn--0zwm56d")
+        let saved = try await s.hosts()
+        XCTAssertEqual(saved, [first])
+    }
+
+    func testRepairIPv6AddressCaseKeepsIdentityOnlyOutsideZone() async throws {
+        let tokens = InMemoryDeviceTokens()
+        let s = store(tokens: tokens) { _, _ in GatewayCredential(device: "dev", token: Fixture.token) }
+        let first = try await s.pair(code: Fixture.code(host: "[FE80::1%en0]"), deviceName: "p")
+        let same = try await s.pair(code: Fixture.code(host: "[fe80::1%en0]"), deviceName: "p")
+        XCTAssertEqual(same.id, first.id)
+        let otherZone = try await s.pair(code: Fixture.code(host: "[fe80::1%EN0]"), deviceName: "p")
+        XCTAssertNotEqual(otherZone.id, first.id)
+        XCTAssertEqual(otherZone.address, "fe80::1%EN0")
+        let saved = try await s.hosts()
+        XCTAssertEqual(saved.count, 2)
+    }
+
+    func testRawIPv6ZonesKeepSeparateCredentialsAcrossRepeatedSavesAndReopens() async throws {
+        let tokens = InMemoryDeviceTokens()
+        let zones = ["en0", "25en0", "25", "2525en0", "2525", "EN0"]
+        let pairer: ArgoHostStore.Pairer = { code, _ in
+            let index = zones.firstIndex { code.host == "fe80::1%\($0)" }! + 1
+            return GatewayCredential(device: "dev\(index)", token: String(repeating: "\(index)", count: 40))
+        }
+        var identities: [String: UUID] = [:]
+        for _ in 0..<3 {
+            let reopened = store(tokens: tokens, pairer: pairer)
+            for (index, zone) in zones.enumerated() {
+                let address = "fe80::1%\(zone)"
+                let saved = try await reopened.pair(code: Fixture.code(host: "[\(address)]"), deviceName: "p")
+                XCTAssertEqual(saved.address, address)
+                if let id = identities[zone] { XCTAssertEqual(saved.id, id) }
+                identities[zone] = saved.id
+                let credential = try await reopened.credential(for: saved)
+                XCTAssertEqual(credential.device, "dev\(index + 1)")
+                XCTAssertEqual(credential.token, String(repeating: "\(index + 1)", count: 40))
+            }
+            let saved = try await reopened.hosts()
+            XCTAssertEqual(saved.count, zones.count)
+            XCTAssertEqual(Set(saved.map(\.id)).count, zones.count)
+        }
+        let reopened = store(tokens: tokens) { _, _ in XCTFail("no pairing on load"); throw CancellationError() }
+        let saved = try await reopened.hosts()
+        XCTAssertEqual(Set(saved.map(\.address)), Set(zones.map { "fe80::1%\($0)" }))
+        XCTAssertEqual(Set(saved.map(\.id)), Set(identities.values))
+    }
+
+    func testUnicodeCaseAndALabelRepairKeepIdentity() async throws {
+        let tokens = InMemoryDeviceTokens()
+        let s = store(tokens: tokens) { _, _ in GatewayCredential(device: "dev", token: Fixture.token) }
+        let first = try await s.pair(code: Fixture.code(host: "FAẞ.de"), deviceName: "p")
+        for input in ["faß.de", "xn--fa-hia.de", "XN--FA-HIA.DE", "ＦＡẞ.de"] {
+            let same = try await s.pair(code: Fixture.code(host: input), deviceName: "p")
+            XCTAssertEqual(same.id, first.id)
+        }
+        let other = try await s.pair(code: Fixture.code(host: "fass.de"), deviceName: "p")
+        XCTAssertNotEqual(first.id, other.id)
+    }
+
     func testPairingErrorsSaveNothing() async throws {
         let tokens = InMemoryDeviceTokens()
         let s = store(tokens: tokens) { _, _ in throw GatewayError.pairingRejected("used") }

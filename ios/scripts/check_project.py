@@ -89,6 +89,7 @@ def main() -> int:
                 require(settings.get(key) == value, f"{name}: {key} must be {value!r}, got {settings.get(key)!r}")
             require(settings.get("INFOPLIST_KEY_NSLocalNetworkUsageDescription", "").strip(), f"{name}: missing local-network usage description")
             require(settings.get("INFOPLIST_KEY_NSPhotoLibraryUsageDescription", "").strip(), f"{name}: missing photo-library usage description")
+            require(settings.get("INFOPLIST_KEY_NSCameraUsageDescription", "").strip(), f"{name}: missing camera usage description")
             require("DEVELOPMENT_TEAM" not in settings, f"{name}: development team must be selected by the user in Xcode")
         require(not re.search(r"\bDEVELOPMENT_TEAM\s*=", text), "project contains a development team")
         require("NSAllowsArbitraryLoads" not in text and "NSAppTransportSecurity" not in text, "unexpected ATS exception")

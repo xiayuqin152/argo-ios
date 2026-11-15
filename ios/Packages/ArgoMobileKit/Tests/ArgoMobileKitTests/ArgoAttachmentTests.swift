@@ -151,10 +151,32 @@ final class ArgoAttachmentTests: XCTestCase {
         }
         XCTAssertGreaterThan(transcript.start.blockIndex, 0)
         XCTAssertEqual(transcript.retainedBytes, transcript.items.reduce(0) { $0 + $1.retainedByteCount })
-        XCTAssertNil(try ArgoFileReference.link(URL(string: "https://synthetic.invalid/image")!))
-        XCTAssertEqual(try ArgoFileReference.link(URL(fileURLWithPath: "/synthetic/a b.pdf"))?.path, "/synthetic/a b.pdf")
+        let linked = try ArgoFileReference(path: "/synthetic/a b.pdf", name: "server name.pdf")
+        XCTAssertNil(try ArgoFileReference.link(URL(string: "https://synthetic.invalid/image")!, references: []))
+        XCTAssertEqual(try ArgoFileReference.link(URL(fileURLWithPath: linked.path), references: [linked]), linked)
         for value in ["file://other-host/synthetic/a.pdf", "file://user@localhost/synthetic/a.pdf", "file://localhost:80/synthetic/a.pdf", "file:///synthetic/a.pdf?token=x", "file:///synthetic/a.pdf#fragment"] {
-            XCTAssertThrowsError(try ArgoFileReference.link(URL(string: value)!))
+            XCTAssertThrowsError(try ArgoFileReference.link(URL(string: value)!, references: [linked]))
+        }
+    }
+
+    func testBodyLinksRequireExactMessageReference() throws {
+        let literal = try ArgoFileReference(path: "/work/a%2Fb 中.txt", name: "source name.txt")
+        let slash = try ArgoFileReference(path: "/work/a/b 中.txt", name: "different file.txt")
+        let url = URL(string: "file:///work/a%252Fb%20%E4%B8%AD.txt")!
+        XCTAssertEqual(try ArgoFileReference.link(url, references: [slash, literal]), literal)
+        XCTAssertThrowsError(try ArgoFileReference.link(url, references: [slash]))
+        XCTAssertThrowsError(try ArgoFileReference.link(url, references: []))
+
+        let nfc = try ArgoFileReference(path: "/work/caf\u{e9}.txt", name: "NFC")
+        let nfd = try ArgoFileReference(path: "/work/cafe\u{301}.txt", name: "NFD")
+        let nfcURL = URL(fileURLWithPath: nfc.path)
+        let nfdURL = URL(fileURLWithPath: nfd.path)
+        XCTAssertEqual(try ArgoFileReference.link(nfcURL, references: [nfd, nfc])?.name, "NFC")
+        XCTAssertEqual(try ArgoFileReference.link(nfdURL, references: [nfc, nfd])?.name, "NFD")
+        XCTAssertThrowsError(try ArgoFileReference.link(nfcURL, references: [nfd]))
+        XCTAssertThrowsError(try ArgoFileReference.link(nfdURL, references: [nfc]))
+        for value in ["file:///work/a%00b.txt", "file:////remote/a", "file:///work/a%1Bb.txt"] {
+            XCTAssertThrowsError(try ArgoFileReference.link(URL(string: value)!, references: [literal]))
         }
     }
 

@@ -90,7 +90,7 @@ struct QuestionCard: View {
         } message: { Text(verbatim: answer.wrappedValue) }
         .accessibilityIdentifier("question-" + ask.questionID)
         .onChange(of: ask) { _, _ in reportDisplayedQuestion() }
-        .onChange(of: model.conversationVisible) { _, _ in reportDisplayedQuestion() }
+        .onChange(of: model.seenAdmissionAllowed) { _, _ in reportDisplayedQuestion() }
         .onChange(of: model.status.isConnected) { _, _ in reportDisplayedQuestion() }
     }
 

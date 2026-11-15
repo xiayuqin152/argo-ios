@@ -128,6 +128,7 @@ struct PendingBubble: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let problem {
                     Text(verbatim: problem).font(Theme.Font.caption).foregroundStyle(.secondary)
+                        .readingContent()
                 }
                 if message.duplicate {
                     Text("Acknowledged earlier attempt").font(Theme.Font.label).foregroundStyle(.secondary)

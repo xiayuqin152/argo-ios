@@ -8,7 +8,7 @@ import UIKit
 struct AttachmentPreview: Identifiable {
     enum Source {
         case local(ArgoLocalAttachment)
-        case remote(ArgoFileReference, SessionKey, ArgoAgentIdentity)
+        case remote(ArgoFileReference, SessionKey, ArgoAgentIdentity, ArgoChatItem?)
     }
     let id = UUID()
     let source: Source
@@ -54,8 +54,8 @@ struct AttachmentViewer: View {
                 let loaded: ArgoLocalAttachment
                 switch preview.source {
                 case .local(let local): loaded = local
-                case .remote(let reference, let key, let identity):
-                    loaded = try await model.downloadAttachment(reference, key: key, identity: identity)
+                case .remote(let reference, let key, let identity, let message):
+                    loaded = try await model.downloadAttachment(reference, key: key, identity: identity, message: message)
                 }
                 try Task.checkCancellation()
                 let ext = loaded.url.pathExtension.lowercased()
@@ -77,7 +77,7 @@ struct AttachmentViewer: View {
     }
 
     private var title: String {
-        switch preview.source { case .local(let file): file.name; case .remote(let ref, _, _): ref.name }
+        switch preview.source { case .local(let file): file.name; case .remote(let ref, _, _, _): ref.name }
     }
     private var isLocal: Bool { if case .local = preview.source { true } else { false } }
 }

@@ -19,7 +19,7 @@
     {
       "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/PairingCode.swift",
       "argo_source": "mac/Sources/LoomKit/PairingCode.swift",
-      "sha256": "07fc89c2075cca6bb89e6ef2d025124b1dcc68df84b8f3c8f6d6c0312636689a"
+      "sha256": "a2e3b4d3e08f52112d32b18b749ad3bf52d1bc31c3048f2a356c1a066a0c0100"
     },
     {
       "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/Host.swift",
@@ -29,7 +29,7 @@
     {
       "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/GatewayConnection.swift",
       "argo_source": "mac/Sources/LoomKit/GatewayConnection.swift",
-      "sha256": "c1c01c2d4628da30bc5f1d27848e93dc27577fa1ae465597ab09b744b461b513"
+      "sha256": "82c0395c479c2bf1c7d7d0064931ad395a8be320372e1b5188e85a4f7a1b923d"
     },
     {
       "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/AgentNameTags.swift",
