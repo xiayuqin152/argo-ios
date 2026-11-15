@@ -30,6 +30,7 @@ if [ "$MODE" = "--check" ]; then
     cp -R "$ROOT/Packages/ArgoMobileKit" "$TMP/Packages/ArgoMobileKit"
     cp -R "$ROOT/ThirdParty/BeautifulUI" "$TMP/ThirdParty/BeautifulUI"
     cp "$ROOT/project.yml" "$TMP/project.yml"
+    cp "$ROOT/Info.plist" "$TMP/Info.plist"
     (
         cd "$TMP"
         xcodegen generate --no-env --spec project.yml --project . --project-root .

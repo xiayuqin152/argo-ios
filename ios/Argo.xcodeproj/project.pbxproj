@@ -529,7 +529,7 @@
 				ARGO_APNS_ENTITLEMENT = production;
 				ARGO_APNS_ENVIRONMENT = production;
 				CODE_SIGN_ENTITLEMENTS = Argo/Argo.entitlements;
-				INFOPLIST_KEY_ArgoAPNSEnvironment = "$(ARGO_APNS_ENVIRONMENT)";
+				INFOPLIST_FILE = Info.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
@@ -568,7 +568,7 @@
 				ARGO_APNS_ENTITLEMENT = development;
 				ARGO_APNS_ENVIRONMENT = sandbox;
 				CODE_SIGN_ENTITLEMENTS = Argo/Argo.entitlements;
-				INFOPLIST_KEY_ArgoAPNSEnvironment = "$(ARGO_APNS_ENVIRONMENT)";
+				INFOPLIST_FILE = Info.plist;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
