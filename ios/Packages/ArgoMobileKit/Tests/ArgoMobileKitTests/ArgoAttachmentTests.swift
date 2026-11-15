@@ -169,8 +169,12 @@ final class ArgoAttachmentTests: XCTestCase {
 
         let nfc = try ArgoFileReference(path: "/work/caf\u{e9}.txt", name: "NFC")
         let nfd = try ArgoFileReference(path: "/work/cafe\u{301}.txt", name: "NFD")
-        let nfcURL = URL(fileURLWithPath: nfc.path)
-        let nfdURL = URL(fileURLWithPath: nfd.path)
+        // Body links carry remote path bytes. Darwin's file-path initializer
+        // decomposes Unicode for the local filesystem before link sees the URL.
+        let nfcURL = try XCTUnwrap(URL(string: "file:///work/caf%C3%A9.txt"))
+        let nfdURL = try XCTUnwrap(URL(string: "file:///work/cafe%CC%81.txt"))
+        XCTAssertEqual(Array(nfcURL.path(percentEncoded: false).utf8), Array(nfc.path.utf8))
+        XCTAssertEqual(Array(nfdURL.path(percentEncoded: false).utf8), Array(nfd.path.utf8))
         XCTAssertEqual(try ArgoFileReference.link(nfcURL, references: [nfd, nfc])?.name, "NFC")
         XCTAssertEqual(try ArgoFileReference.link(nfdURL, references: [nfc, nfd])?.name, "NFD")
         XCTAssertThrowsError(try ArgoFileReference.link(nfcURL, references: [nfd]))
