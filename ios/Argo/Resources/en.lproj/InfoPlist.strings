@@ -1,0 +1,4 @@
+/* Local network permission shown by iOS. */
+"NSLocalNetworkUsageDescription" = "Argo connects to paired development computers on your local network to read workspaces, Agent progress, and messages.";
+
+"NSPhotoLibraryUsageDescription" = "Argo shows recent photos you allow so you can choose images to send to your paired development computer.";

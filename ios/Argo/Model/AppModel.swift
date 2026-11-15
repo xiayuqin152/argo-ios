@@ -1,0 +1,1106 @@
+import ArgoMobileKit
+import Foundation
+import Observation
+
+/// Thin UI adapter for ArgoMobileKit. No endpoint, TLS or credential logic lives here.
+@MainActor @Observable
+final class AppModel {
+    private static let retainedTranscriptLimit = 4
+
+    typealias ConnectionFactory = @Sendable (LoomHost, GatewayCredential) throws -> ArgoConnection
+
+    private(set) var hosts: [LoomHost] = []
+    private(set) var hostID: UUID?
+    private(set) var projects: [ArgoProject] = []
+    private(set) var workspaces: [ArgoWorkspace] = []
+    private(set) var workspaceID: String?
+    private(set) var agents: [ArgoAgentCard] = []
+    private(set) var selectedKey: SessionKey?
+    private(set) var status: ConnectionStatus = .disconnected
+    private(set) var server: ArgoServerInfo?
+    private(set) var loadingHosts = true
+    private(set) var loadingAgents = false
+    private(set) var refreshingAgents = false
+    private(set) var hostProblem: String?
+    private(set) var pairing = false
+    private(set) var pairingProblem: String?
+    private(set) var pairedHostID: UUID?
+    private(set) var conversationVisible = false
+    var search = ""
+    var filter: AgentFilter = .all
+    let newSession: NewSessionModel
+    var newSessionShown = false
+
+    @ObservationIgnored private let store: ArgoHostStore
+    @ObservationIgnored private let makeConnection: ConnectionFactory
+    @ObservationIgnored private let announce: @MainActor (String) -> Void
+    @ObservationIgnored private var connection: ArgoConnection?
+    @ObservationIgnored private var active = false
+    @ObservationIgnored private var hostEpoch = UUID()
+    @ObservationIgnored private var listEpoch = UUID()
+    @ObservationIgnored private var chatEpoch = UUID()
+    @ObservationIgnored private var workspaceEpoch = UUID()
+    @ObservationIgnored private var connectTask: Task<Void, Never>?
+    @ObservationIgnored private var listTask: Task<Void, Never>?
+    @ObservationIgnored private var chatTask: Task<Void, Never>?
+    @ObservationIgnored private var historyTask: Task<Void, Never>?
+    @ObservationIgnored private var pairTask: Task<Void, Never>?
+    @ObservationIgnored private var seenTask: Task<Void, Never>?
+    @ObservationIgnored private var seenEpoch = UUID()
+    @ObservationIgnored private var sends: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var interrupts: [SessionKey: Task<Void, Never>] = [:]
+    @ObservationIgnored private var conversationOrder: [SessionKey] = []
+    private var conversations: [SessionKey: ConversationState] = [:]
+
+    init(store: ArgoHostStore, announce: @escaping @MainActor (String) -> Void = { _ in },
+         pendingCreations: any PendingCreationStoring = PendingCreationFile(),
+         makeConnection: @escaping ConnectionFactory) {
+        self.store = store
+        self.newSession = NewSessionModel(store: pendingCreations)
+        self.announce = announce
+        self.makeConnection = makeConnection
+    }
+
+    var selectedHost: LoomHost? { hosts.first { $0.id == hostID } }
+    var selectedWorkspace: ArgoWorkspace? { workspaces.first { $0.id == workspaceID } }
+    var selectedAgent: ArgoAgentCard? { agents.first { $0.run == selectedKey?.run && $0.terminal == selectedKey?.terminal } }
+    var conversation: ConversationState? { selectedKey.flatMap { conversations[$0] } }
+
+    var showsInterrupt: Bool {
+        guard let state = conversation, let card = selectedAgent,
+              state.canSendToIdentity, card.state == "working", card.status != "stopped",
+              state.transcript.identity?.engine == card.engine else { return false }
+        return ["claude", "codex"].contains(card.engine)
+    }
+
+    var canInterrupt: Bool {
+        showsInterrupt && active && conversationVisible && status.isConnected &&
+            conversation?.isInterruptBusy == false && conversation?.interruptNeedsReview == false &&
+            conversation?.isSending == false
+    }
+
+    var visibleAgents: [ArgoAgentCard] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return agents.filter { card in
+            filter.includes(AgentSession(card)) && (query.isEmpty ||
+                [card.displayTitle, card.activity, card.reply, card.cli, card.profile, card.run]
+                    .contains { $0.localizedStandardContains(query) })
+        }.sorted { a, b in
+            if a.attention != b.attention { return a.attention > b.attention }
+            return ArgoTime.isLater(a.updated, than: b.updated)
+        }
+    }
+
+    func loadHosts() async {
+        loadingHosts = true
+        defer { loadingHosts = false }
+        do {
+            hosts = try await store.hosts()
+            hostProblem = nil
+            if !hosts.contains(where: { $0.id == hostID }) { selectHost(hosts.first?.id) }
+        } catch { hostProblem = L10n.error(error) }
+    }
+
+    func removeHost(_ id: UUID) async throws {
+        // Preserve UI state until both metadata and credential removal succeed.
+        // A failed credential deletion restores metadata or reports its rollback.
+        try await store.remove(id)
+        newSession.forgetHost(id)
+        hosts.removeAll { $0.id == id }
+        if hostID == id { selectHost(hosts.first?.id) }
+        if pairedHostID == id { pairedHostID = nil }
+        for (key, state) in conversations where key.host == id {
+            interrupts.removeValue(forKey: key)?.cancel()
+            for delivery in state.deliveries {
+                sends.removeValue(forKey: delivery.id)?.cancel()
+            }
+            if let recovery = state.modelRecovery {
+                sends.removeValue(forKey: recovery.id.uuidString)?.cancel()
+            }
+            // Views and cancelled requests can still retain this object. Clear it
+            // as well as the cache so a late receipt cannot restore forgotten data.
+            state.forget()
+            conversations.removeValue(forKey: key)
+        }
+        conversationOrder.removeAll { $0.host == id }
+    }
+
+    func setActive(_ value: Bool) {
+        guard active != value else { return }
+        active = value
+        if value { reconnect() } else {
+            pairTask?.cancel()
+            invalidateConnection()
+            pruneConversations()
+            status = .suspended
+        }
+    }
+
+    func selectHost(_ id: UUID?) {
+        guard hostID != id else { return }
+        invalidateConnection()
+        hostID = id
+        newSession.selectHost(id)
+        workspaceID = nil
+        selectedKey = nil
+        conversationVisible = false
+        pruneConversations()
+        projects = []
+        workspaces = []
+        agents = []
+        search = ""
+        server = nil
+        status = .disconnected
+        reconnect()
+    }
+
+    func reconnect() {
+        guard active, let host = selectedHost else { return }
+        invalidateConnection()
+        let epoch = hostEpoch
+        status = .connecting
+        connectTask = Task { [weak self] in
+            guard let self else { return }
+            var opened: ArgoConnection?
+            do {
+                // A cancelled re-pair can still finish its synchronous save.
+                // Resolve the selected UUID again so its new pin/device and
+                // token are used together without changing the selection.
+                guard let currentHost = try await store.hosts().first(where: { $0.id == host.id }) else {
+                    throw ArgoClientError.needsPairing(.message("This host was removed or paired again. Select the host again."))
+                }
+                let credential = try await store.credential(for: currentHost)
+                try Task.checkCancellation()
+                guard isCurrentHost(epoch) else { return }
+                if let index = hosts.firstIndex(where: { $0.id == currentHost.id }) { hosts[index] = currentHost }
+                let client = try makeConnection(currentHost, credential)
+                opened = client
+                connection = client
+                let hello = try await client.connect()
+                async let allProjects = client.projects()
+                async let allWorkspaces = client.workspaces()
+                let catalog = try await (allProjects, allWorkspaces)
+                try Task.checkCancellation()
+                guard isCurrentHost(epoch) else { await client.close(); return }
+                server = hello
+                projects = catalog.0
+                workspaces = catalog.1
+                status = .connected
+                if !workspaces.contains(where: { $0.id == workspaceID }) {
+                    selectWorkspace(workspaces.first?.id)
+                } else {
+                    startAgentPolling()
+                    startConversationPolling()
+                }
+                newSession.loadProfiles(from: client)
+                for intent in newSession.pending where intent.host == host.id && intent.receipt == nil {
+                    newSession.reconcile(intent, using: client) { [weak self] in self?.adoptCreation($0, navigate: false) }
+                }
+            } catch {
+                if let opened { await opened.close() }
+                guard isCurrentHost(epoch) else { return }
+                failConnection(error)
+            }
+        }
+    }
+
+    func selectWorkspace(_ id: String?) {
+        guard workspaceID != id else { return }
+        cancelConversationRequests()
+        listTask?.cancel()
+        listEpoch = UUID()
+        workspaceID = id
+        workspaceEpoch = UUID()
+        newSession.present(host: hostID, workspace: selectedWorkspace)
+        selectedKey = nil
+        conversationVisible = false
+        pruneConversations()
+        agents = []
+        search = ""
+        startAgentPolling()
+    }
+
+    func key(for card: ArgoAgentCard) -> SessionKey? {
+        guard let hostID, card.ws == workspaceID else { return nil }
+        return SessionKey(host: hostID, workspace: card.ws, run: card.run, terminal: card.terminal)
+    }
+
+    func selectSession(_ key: SessionKey?) {
+        if let key {
+            guard key.host == hostID, key.workspace == workspaceID,
+                  (agents.contains(where: { self.key(for: $0) == key }) ||
+                   newSession.pending.contains(where: { $0.key == key })) else { return }
+        }
+        guard selectedKey != key else { return }
+        cancelConversationRequests()
+        selectedKey = key
+        conversationVisible = false
+        if let key {
+            if conversations[key] == nil { conversations[key] = ConversationState(key: key) }
+            conversationOrder.removeAll { $0 == key }
+            conversationOrder.append(key)
+        }
+        if let key, let intent = newSession.pending.first(where: { $0.key == key }), conversations[key]?.creation == nil {
+            conversations[key]?.creation = FirstMessageSubmission(context: intent.context, text: newSession.prompt(for: intent.context))
+        }
+        pruneConversations()
+    }
+
+    func showConversation(_ key: SessionKey, visible: Bool) {
+        guard key == selectedKey else { return }
+        conversationVisible = visible
+        if visible {
+            startConversationPolling()
+            markSelectedConversationSeen()
+        } else { cancelConversationRequests() }
+    }
+
+    func refreshConversation() {
+        if let state = conversation, !state.followingLatest, state.transcript.identity != nil {
+            readWindow(.around(state.transcript.start), followingLatest: false)
+        } else { startConversationPolling() }
+    }
+    var agentRefreshAvailable: Bool {
+        active && selectedHost != nil && workspaceID != nil && status != .connecting
+    }
+
+    var canRefreshAgents: Bool { agentRefreshAvailable && !refreshingAgents }
+
+    func refreshAgents() {
+        guard canRefreshAgents else { return }
+        if status.isConnected { startAgentPolling() } else { reconnect() }
+    }
+
+    var startingCreations: [PendingAgentCreation] {
+        newSession.pending.filter { $0.host == hostID && $0.workspace == workspaceID && $0.receipt != nil }
+    }
+
+    func presentNewSession() {
+        newSession.present(host: hostID, workspace: selectedWorkspace)
+        newSessionShown = true
+        refreshLaunchProfiles()
+    }
+
+    func refreshLaunchProfiles() {
+        if status.isConnected, let connection { newSession.loadProfiles(from: connection) }
+    }
+
+    func startNewSession() {
+        guard active, status.isConnected, let hostID, let workspace = selectedWorkspace, let connection else { return }
+        let host = hostEpoch, workspaceRevision = workspaceEpoch
+        newSession.start(host: hostID, workspace: workspace, using: connection) { [weak self] intent in
+            guard let self else { return }
+            adoptCreation(intent, navigate: isCurrentHost(host) && workspaceEpoch == workspaceRevision)
+        }
+    }
+
+    func checkCreation(_ intent: PendingAgentCreation) {
+        guard active, status.isConnected, intent.host == hostID, let connection else { return }
+        newSession.reconcile(intent, using: connection) { [weak self] in self?.adoptCreation($0, navigate: false) }
+    }
+
+    func openCreation(_ intent: PendingAgentCreation) { adoptCreation(intent, navigate: true) }
+
+    private func adoptCreation(_ intent: PendingAgentCreation, navigate: Bool) {
+        guard let key = intent.key else { return }
+        let state = conversations[key] ?? ConversationState(key: key)
+        if state.creation == nil {
+            state.creation = FirstMessageSubmission(context: intent.context, text: newSession.prompt(for: intent.context))
+        }
+        conversations[key] = state
+        conversationOrder.removeAll { $0 == key }
+        conversationOrder.append(key)
+        defer { pruneConversations() }
+        guard navigate, active, intent.host == hostID, intent.workspace == workspaceID else { return }
+        selectSession(key)
+        newSessionShown = false
+    }
+
+    func interruptCurrentTurn() {
+        guard canInterrupt, let state = conversation, let connection,
+              connection.host.id == state.key.host, let identity = state.transcript.identity else { return }
+        let epoch = hostEpoch
+        let chat = chatEpoch
+        let list = listEpoch
+        state.interruptStatus = .stopping
+        interrupts[state.key] = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                interrupts[state.key] = nil
+                pruneConversations()
+            }
+            do {
+                try Task.checkCancellation()
+                let receipt = try await connection.interrupt(run: state.key.run)
+                guard conversations[state.key] === state else { return }
+                guard receipt.ws == state.key.workspace else {
+                    throw ArgoClientError.deliveryUnknown(.message("The conversation changed before the stop result arrived."))
+                }
+                if receipt.stopped { state.interruptStatus = .stopped }
+                else if receipt.reason == "not_working" { state.interruptStatus = .notWorking }
+                else if receipt.reason == "idle" { state.interruptStatus = .idle }
+                else { state.interruptStatus = .unconfirmed; state.interruptNeedsReview = true }
+            } catch {
+                guard conversations[state.key] === state else { return }
+                state.interruptNeedsReview = (error as? ArgoClientError)?.mayHaveBeenDelivered == true
+                state.interruptStatus = state.interruptNeedsReview ? .unknown(L10n.error(error)) : .failed(L10n.error(error))
+                if isCurrentHost(epoch), isConnectionFailure(error) { failConnection(error) }
+            }
+            // Refreshes are reads. They never repeat the stop, release a queue
+            // hold, or project the receipt's state onto the live Agent card.
+            await refreshInterruptState(state, using: connection, epoch: epoch, chat: chat, list: list,
+                                        identity: identity, reviewed: false)
+        }
+    }
+
+    func refreshInterrupt() {
+        guard let state = conversation, !state.isInterruptBusy, status.isConnected,
+              let connection, active, conversationVisible else { return }
+        let epoch = hostEpoch
+        let chat = chatEpoch
+        let list = listEpoch
+        let identity = state.transcript.identity
+        state.refreshingInterrupt = true
+        interrupts[state.key] = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                interrupts[state.key] = nil
+                pruneConversations()
+            }
+            await refreshInterruptState(state, using: connection, epoch: epoch, chat: chat, list: list,
+                                        identity: identity, reviewed: true)
+        }
+    }
+
+    private func refreshInterruptState(_ state: ConversationState, using connection: ArgoConnection,
+                                       epoch: UUID, chat: UUID, list: UUID,
+                                       identity: ArgoAgentIdentity?, reviewed: Bool) async {
+        state.refreshingInterrupt = true
+        defer { state.refreshingInterrupt = false }
+        // A receipt belongs to its operation even after navigation. Readback
+        // may take ownership only while that operation's view and list still own it.
+        guard isCurrentHost(epoch), currentChat(state, chat), listEpoch == list,
+              conversations[state.key] === state, state.transcript.identity == identity else { return }
+        // Invalidate pre-stop polls so a late older read cannot overwrite these.
+        listTask?.cancel()
+        listEpoch = UUID()
+        chatTask?.cancel()
+        historyTask?.cancel()
+        chatEpoch = UUID()
+        state.loadingOlder = false
+        let readbackChat = chatEpoch
+        let readbackList = listEpoch
+        refreshingAgents = true
+        defer { if listEpoch == readbackList { refreshingAgents = false } }
+        // The same ownership condition governs success, failure and restarting
+        // normal polls. A later history/latest/list read owns the current view.
+        func currentReadback() -> Bool {
+            isCurrentHost(epoch) && currentChat(state, readbackChat) && listEpoch == readbackList &&
+                conversations[state.key] === state && state.transcript.identity == identity
+        }
+        func readCards() async throws -> [ArgoAgentCard] {
+            defer { if listEpoch == readbackList { refreshingAgents = false } }
+            return try await connection.agents(workspace: state.key.workspace)
+        }
+        do {
+            async let cards = readCards()
+            async let team = connection.team(run: state.key.run)
+            async let queue = connection.queue(run: state.key.run)
+            let fresh = try await (cards, team, queue)
+            try Task.checkCancellation()
+            guard currentReadback() else { return }
+            agents = fresh.0
+            state.team = fresh.1
+            state.queue = fresh.2
+            state.problem = nil
+            if reviewed { state.interruptNeedsReview = false }
+            if !agents.contains(where: { key(for: $0) == state.key }) { selectSession(nil) }
+        } catch {
+            guard currentReadback() else { return }
+            state.problem = L10n.error(error)
+            if isConnectionFailure(error) { failConnection(error) }
+        }
+        if currentReadback() {
+            refreshingAgents = false
+            refreshAgents()
+            refreshConversation()
+        }
+    }
+
+    private func startAgentPolling() {
+        listTask?.cancel()
+        listEpoch = UUID()
+        guard active, status.isConnected, let connection, let workspaceID else {
+            loadingAgents = false
+            refreshingAgents = false
+            return
+        }
+        let epoch = listEpoch
+        let host = hostEpoch
+        loadingAgents = agents.isEmpty
+        refreshingAgents = true
+        listTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if epoch == listEpoch { refreshingAgents = false } }
+            do {
+                while !Task.isCancelled {
+                    refreshingAgents = true
+                    let cards = try await connection.agents(workspace: workspaceID)
+                    try Task.checkCancellation()
+                    guard epoch == listEpoch, isCurrentHost(host) else { return }
+                    agents = cards
+                    loadingAgents = false
+                    refreshingAgents = false
+                    if let selectedKey, !cards.contains(where: { key(for: $0) == selectedKey }),
+                       !newSession.pending.contains(where: { $0.key == selectedKey }) {
+                        selectSession(nil)
+                    }
+                    if let hostID { newSession.observed(cards, host: hostID, workspace: workspaceID) }
+                    markSelectedConversationSeen()
+                    try await Task.sleep(for: .seconds(5))
+                }
+            } catch {
+                guard !Task.isCancelled, epoch == listEpoch, isCurrentHost(host) else { return }
+                loadingAgents = false
+                failConnection(error)
+            }
+        }
+    }
+
+    /// Called by the visible question body, never by a list/team load.
+    func questionDisplayed(_ ask: ArgoAsk, in key: SessionKey) {
+        guard active, conversationVisible, status.isConnected, selectedKey == key,
+              let state = conversation, !ask.questionID.isEmpty, !ask.text.isEmpty else { return }
+        if ArgoRun.isManaged(key.run) {
+            guard ask.run == key.run, state.team?.asks.contains(ask) == true else { return }
+        } else {
+            guard selectedAgent?.run == "unmanaged:" + key.terminal, selectedAgent?.ask == ask else { return }
+        }
+        state.displayedQuestionIDs.insert(ask.questionID)
+        markSelectedConversationSeen()
+    }
+
+    private func seenIDs(for card: ArgoAgentCard, in state: ConversationState) -> [String]? {
+        guard card.state != "working", card.unread || !card.waitingIDs.isEmpty else { return nil }
+        if card.state == "waiting" || !card.waitingIDs.isEmpty {
+            let ids = card.waitingIDs.filter { !$0.isEmpty && state.displayedQuestionIDs.contains($0) }
+            return ids.isEmpty ? nil : ids
+        }
+        // Non-waiting read state uses the existing timestamp protocol, with no
+        // completion-revision precondition. Never invent a waiting fallback ID.
+        return []
+    }
+
+    private func markSelectedConversationSeen() {
+        guard active, conversationVisible, status.isConnected, let connection,
+              seenTask == nil, let state = conversation, let card = selectedAgent,
+              let ids = seenIDs(for: card, in: state) else { return }
+        let managed = ArgoRun.isManaged(card.run)
+        let manual = card.run == "unmanaged:" + card.terminal
+        guard managed || manual else { return }
+        let signature = ([card.state, card.stateStartedAt, card.updated] + ids).joined(separator: "\u{1}")
+        guard state.seenSignature != signature else { return }
+        let epoch = hostEpoch
+        let requestID = UUID()
+        seenEpoch = requestID
+        seenTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if seenEpoch == requestID { seenTask = nil } }
+            do {
+                try Task.checkCancellation()
+                // Recheck after scheduling, using the captured connection and full
+                // destination. Core also checks cancellation after token acquisition
+                // and immediately before transport.send (including a 401 retry).
+                guard isCurrentHost(epoch), seenEpoch == requestID,
+                      conversationVisible, status.isConnected, selectedKey == state.key,
+                      state.key.host == hostID, state.key.workspace == workspaceID,
+                      connection === self.connection, let current = selectedAgent,
+                      let currentIDs = seenIDs(for: current, in: state),
+                      ids.isEmpty ? currentIDs.isEmpty : ids.allSatisfy(currentIDs.contains) else { return }
+                if managed { try await connection.markAgentSeen(run: card.run, waitingIDs: ids) }
+                else { try await connection.markTerminalSeen(terminal: card.terminal, waitingIDs: ids) }
+                guard isCurrentHost(epoch), seenEpoch == requestID,
+                      conversationVisible, selectedKey == state.key, connection === self.connection else { return }
+                state.seenSignature = signature
+                // Replace the stale card promptly so Unread styling and filters
+                // reflect the server's confirmed marker, not a local assumption.
+                startAgentPolling()
+            } catch {
+                // Read failures leave the successful signature unchanged. A later
+                // visible refresh retries the exact displayed, still-unread IDs.
+            }
+        }
+    }
+
+    private func startConversationPolling() {
+        chatTask?.cancel()
+        historyTask?.cancel()
+        conversation?.loadingOlder = false
+        conversation?.modelRecovery?.refreshing = false
+        chatEpoch = UUID()
+        guard active, status.isConnected, conversationVisible, let state = conversation, let connection else { return }
+        let epoch = chatEpoch
+        chatTask = Task { [weak self] in
+            guard let self else { return }
+            var tick = 0
+            do {
+                while !Task.isCancelled {
+                    if state.followingLatest && !state.loadingOlder {
+                        try await readChat(state, from: connection, cursor: state.transcript.nextCursor, epoch: epoch)
+                    }
+                    try Task.checkCancellation()
+                    guard currentChat(state, epoch) else { return }
+                    // The team endpoint also reads git; refresh it every 15s, not every chat poll.
+                    if ArgoRun.isManaged(state.key.run), tick % 5 == 0 {
+                        async let progress = connection.team(run: state.key.run)
+                        async let queue = connection.queue(run: state.key.run)
+                        let details = try await (progress, queue)
+                        try Task.checkCancellation()
+                        guard currentChat(state, epoch) else { return }
+                        state.team = details.0
+                        state.queue = details.1
+                    }
+                    tick += 1
+                    try await Task.sleep(for: .seconds(3))
+                }
+            } catch {
+                guard !Task.isCancelled, currentChat(state, epoch) else { return }
+                state.loading = false
+                state.problem = L10n.error(error)
+                if isConnectionFailure(error) { failConnection(error) }
+            }
+        }
+    }
+
+    private func readChat(_ state: ConversationState, from connection: ArgoConnection,
+                          cursor: ArgoChatCursor, epoch: UUID) async throws {
+        do {
+            let page = try await connection.chat(terminal: state.key.terminal, cursor: cursor,
+                                                 session: state.transcript.identity?.session)
+            try Task.checkCancellation()
+            guard currentChat(state, epoch) else { return }
+            if cursor == .latest, let previous = state.transcript.identity,
+               page.waiting == nil, previous != page.identity {
+                cancelSends()
+                state.sessionChanged()
+            }
+            let change = state.transcript.apply(page, cursor: cursor)
+            if change == .stalePage {
+                throw ArgoClientError.invalidResponse(.message("The history window changed. Refresh the conversation to continue."))
+            }
+            if case .waiting = change {
+                cancelSends()
+                state.team = nil
+                state.queue = nil
+                state.followingLatest = true
+            }
+            if change == .sessionChanged {
+                cancelSends()
+                state.sessionChanged()
+                try await readChat(state, from: connection, cursor: .latest, epoch: epoch)
+            }
+            state.loading = false
+            state.problem = nil
+        } catch let error as ArgoClientError {
+            if case .http(status: 404, _, _) = error, currentChat(state, epoch) {
+                // Unlike an absent list card, this proves the known terminal is gone.
+                newSession.terminalGone(state.key)
+            }
+            if case .http(status: 409, _, _) = error, cursor != .latest {
+                guard currentChat(state, epoch) else { return }
+                cancelSends()
+                state.sessionChanged()
+                try await readChat(state, from: connection, cursor: .latest, epoch: epoch)
+            } else { throw error }
+        }
+    }
+
+    func loadOlder() {
+        guard let state = conversation, let cursor = state.transcript.olderCursor else { return }
+        readWindow(cursor, followingLatest: false)
+    }
+
+    func loadNewer() {
+        guard let state = conversation, state.transcript.newer else { return }
+        readWindow(state.transcript.nextCursor, followingLatest: false)
+    }
+
+    func showLatest() { readWindow(.latest, followingLatest: true) }
+
+    private func readWindow(_ cursor: ArgoChatCursor, followingLatest: Bool) {
+        guard let state = conversation, !state.loadingOlder || cursor == .latest,
+              let connection, status.isConnected else { return }
+        // Latest can supersede a history read; only the current epoch may merge.
+        chatTask?.cancel()
+        historyTask?.cancel()
+        conversation?.modelRecovery?.refreshing = false
+        chatEpoch = UUID()
+        let epoch = chatEpoch
+        state.followingLatest = followingLatest
+        state.loadingOlder = true
+        historyTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if epoch == chatEpoch {
+                    state.loadingOlder = false
+                    if currentChat(state, epoch) { startConversationPolling() }
+                }
+            }
+            do {
+                try await readChat(state, from: connection, cursor: cursor, epoch: epoch)
+                guard currentChat(state, epoch) else { return }
+                if case .after = cursor, !state.transcript.newer { state.followingLatest = true }
+            }
+            catch {
+                guard !Task.isCancelled, currentChat(state, epoch) else { return }
+                state.problem = L10n.error(error)
+                if isConnectionFailure(error) { failConnection(error) }
+            }
+        }
+    }
+
+    func sendDraft(for key: SessionKey? = nil) {
+        if let key, key != selectedKey { return }
+        guard let state = conversation, state.canSendToIdentity, !state.isSending, !state.isInterruptBusy,
+              status.isConnected, let connection else { return }
+        if !state.attachments.isEmpty { sendAttachments(in: state, using: connection); return }
+        guard !state.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let message = ArgoOutgoingMessage(run: state.key.run, text: state.draft, target: state.transcript.identity)
+        state.draft = ""
+        state.followingLatest = true
+        deliver(.message(message), in: state, using: connection)
+    }
+
+    func addAttachments(_ inputs: [AttachmentInput], to state: ConversationState, identity: ArgoAgentIdentity) {
+        guard conversations[state.key] === state else { return }
+        state.prepareAttachments(inputs, identity: identity, start: active && selectedKey == state.key && state.transcript.identity == identity)
+    }
+
+    private func sendAttachments(in state: ConversationState, using client: ArgoConnection) {
+        guard let identity = state.transcript.identity,
+              state.attachments.allSatisfy({ $0.identity == identity }) else {
+            state.attachmentProblem = L10n.text("These attachments belong to the earlier conversation. Remove them and select them again to send here.")
+            return
+        }
+        let caption = state.draft
+        let order = state.attachments.map(\.id)
+        let preparations = order.compactMap { state.attachmentPreparations[$0] }
+        let host = hostEpoch
+        let batch = UUID()
+        state.attachmentSendID = batch
+        state.attachmentProblem = nil
+        state.attachmentTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if state.attachmentSendID == batch { state.attachmentSendID = nil; state.attachmentTask = nil }
+                pruneConversations()
+            }
+            do {
+                for preparation in preparations {
+                    await preparation.value
+                    try checkAttachmentDestination(state, identity: identity, batch: batch, host: host)
+                }
+                for id in order {
+                    try checkAttachmentDestination(state, identity: identity, batch: batch, host: host)
+                    guard let item = state.attachments.first(where: { $0.id == id }), let file = item.local else {
+                        throw ArgoClientError.refusedLocally(.message("An attachment is not ready. Remove failed items or select them again."))
+                    }
+                    if item.remote != nil { continue }
+                    state.updateAttachment(id) { $0.phase = .uploading }
+                    let uploaded = try await client.uploadAttachment(file)
+                    try checkAttachmentDestination(state, identity: identity, batch: batch, host: host)
+                    state.updateAttachment(id) { $0.remote = uploaded; $0.phase = .readyRemote }
+                }
+                try checkAttachmentDestination(state, identity: identity, batch: batch, host: host)
+                var copies: [SentAttachment] = []
+                for id in order {
+                    guard let item = state.attachments.first(where: { $0.id == id }),
+                          item.phase == .readyRemote, let local = item.local, let remote = item.remote else {
+                        throw ArgoClientError.refusedLocally(.message("An attachment is not ready. Remove failed items or select them again."))
+                    }
+                    copies.append(SentAttachment(local: local, remote: remote))
+                }
+                let text = try ArgoAttachmentMessage.text(caption: caption, files: copies.map { ($0.remote, $0.local.kind) })
+                // No queue attempt exists before all four-or-fewer exact upload
+                // receipts are ready. Retry thereafter uses only this operation.
+                let message = ArgoOutgoingMessage(run: state.key.run, text: text, target: identity)
+                if state.draft == caption { state.draft = "" }
+                state.attachments.removeAll { order.contains($0.id) }
+                state.attachmentSendID = nil
+                state.attachmentTask = nil
+                state.followingLatest = true
+                deliver(.message(message), in: state, using: client, attachments: copies)
+            } catch {
+                guard state.attachmentSendID == batch else { return }
+                state.attachmentProblem = L10n.fileError(error)
+                for id in order {
+                    state.updateAttachment(id) {
+                        if $0.phase == .uploading { $0.phase = .failed(L10n.fileError(error)) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func checkAttachmentDestination(_ state: ConversationState, identity: ArgoAgentIdentity,
+                                            batch: UUID, host: UUID) throws {
+        try Task.checkCancellation()
+        guard isCurrentHost(host), status.isConnected, selectedKey == state.key,
+              conversations[state.key] === state, state.attachmentSendID == batch,
+              state.transcript.identity == identity else {
+            throw ArgoClientError.refusedLocally(.message("The conversation changed. The message was not sent."))
+        }
+    }
+
+    func downloadAttachment(_ reference: ArgoFileReference, key: SessionKey,
+                            identity: ArgoAgentIdentity) async throws -> ArgoLocalAttachment {
+        guard active, status.isConnected, key == selectedKey, key.host == hostID,
+              let state = conversations[key], state.transcript.identity == identity, let client = connection else {
+            throw ArgoClientError.refusedLocally(.message("The conversation changed. Open the file from its original conversation."))
+        }
+        let epoch = hostEpoch
+        let bytes = try await client.downloadAttachment(reference, workspace: key.workspace, terminal: key.terminal)
+        try Task.checkCancellation()
+        guard isCurrentHost(epoch), selectedKey == key, state.transcript.identity == identity else {
+            throw ArgoClientError.refusedLocally(.message("The conversation changed. Open the file from its original conversation."))
+        }
+        let work = Task.detached(priority: .userInitiated) {
+            try ArgoLocalAttachment.create(name: reference.name, mime: "application/octet-stream", kind: .file) {
+                try bytes.write(to: $0)
+            }
+        }
+        let file = try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+        try Task.checkCancellation()
+        guard isCurrentHost(epoch), selectedKey == key, state.transcript.identity == identity else {
+            throw ArgoClientError.refusedLocally(.message("The conversation changed. Open the file from its original conversation."))
+        }
+        return file
+    }
+
+    func reply(to ask: ArgoAsk) {
+        guard let state = conversation, !state.isSending, !state.isInterruptBusy, state.canReply(to: ask),
+              ask.run == state.key.run, status.isConnected, let connection else { return }
+        let text = state.replyDrafts[ask.uiID] ?? ""
+        guard ask.acceptsReply(text, engine: selectedAgent?.engine ?? "") else { return }
+        state.replyDrafts[ask.uiID] = ""
+        state.followingLatest = true
+        deliver(.reply(ask, terminal: state.key.terminal, text: text, attempt: ArgoAttempt.make()),
+                in: state, using: connection)
+    }
+
+    func retry(_ requested: PendingDelivery) {
+        guard let state = conversation, !state.isSending, !state.isInterruptBusy,
+              let delivery = state.deliveries.first(where: { $0.id == requested.id }), delivery.status.canRetry,
+              status.isConnected, let connection else { return }
+        // Only a request explicitly known not to have left the phone can be retried.
+        if case .message(let message) = delivery.operation {
+            guard message.target == state.transcript.identity, state.canSendToIdentity else {
+                state.setStatus(.rejected(L10n.text("The conversation changed. Copy this message into the draft to review it.")), for: delivery.id)
+                return
+            }
+        }
+        if case .reply(let ask, let terminal, _, _) = delivery.operation {
+            guard !state.hasAnswered(ask), ask.run == state.key.run, terminal == state.key.terminal,
+                  state.team?.asks.contains(where: { $0.uiID == ask.uiID }) == true else {
+                state.setStatus(.rejected(L10n.text("The question changed. Review the current question before answering.")), for: delivery.id)
+                return
+            }
+        }
+        state.setStatus(.sending, for: delivery.id)
+        perform(delivery.operation, in: state, using: connection)
+    }
+
+    /// One explicit model-error recovery action for the selected managed Claude.
+    /// The synchronous operation install is the double-tap guard; the draft is
+    /// deliberately retained after every outcome.
+    func switchModelAndResume() {
+        guard let state = conversation, selectedAgent?.offersModelRecovery == true,
+              state.canStartModelRecovery, status.isConnected, let connection else { return }
+        guard let id = ArgoModelID.normalized(state.modelRecoveryDraft) else {
+            state.modelRecoveryProblem = L10n.text("Enter a model ID using only letters, digits and . : / @ [ ] - _, up to 80 characters.")
+            return
+        }
+        let operationID = UUID()
+        state.beginModelRecovery(operationID, model: id)
+        let epoch = hostEpoch
+        sends[operationID.uuidString] = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                sends[operationID.uuidString] = nil
+                pruneConversations()
+            }
+            do {
+                let receipt = try await connection.switchModelAndResume(run: state.key.run, model: id)
+                let result = modelRecoveryStatus(receipt)
+                state.finishModelRecovery(operationID, status: result)
+                // A valid receipt still needs real card/chat readback. Unknown
+                // transport results do not read or replay until the user asks.
+                if isCurrentHost(epoch), selectedKey == state.key, conversationVisible { refreshModelRecovery() }
+            } catch {
+                state.finishModelRecovery(operationID, status: modelRecoveryFailure(error))
+                if isCurrentHost(epoch), !Task.isCancelled, isConnectionFailure(error) { failConnection(error) }
+            }
+        }
+    }
+
+    private func modelRecoveryStatus(_ receipt: ArgoModelSwitchReceipt) -> ModelRecoveryOperation.Status {
+        if !receipt.switched { return .notSwitched(receipt.message) }
+        let native = receipt.message
+        guard let resume = receipt.resume else {
+            return .switchedNotResumed(joinRecoveryDetail([native, L10n.text("The host returned no resume receipt.")]))
+        }
+        let reason = resume.message.isEmpty ? resume.reason : resume.message
+        let detail = joinRecoveryDetail([native, reason])
+        return resume.sent ? .switchedAndResumed(detail) : .switchedNotResumed(detail)
+    }
+
+    private func joinRecoveryDetail(_ parts: [String]) -> String {
+        var seen = Set<String>()
+        return parts.filter { !$0.isEmpty && seen.insert($0).inserted }.joined(separator: "\n")
+    }
+
+    private func modelRecoveryFailure(_ error: Error) -> ModelRecoveryOperation.Status {
+        let text = L10n.error(error)
+        if (error as? ArgoClientError)?.mayHaveBeenDelivered == true { return .unknown(text) }
+        // A 404 can also come from claimResume after Claude accepted /model.
+        // Unlike an ordinary queue write, this endpoint cannot call every 404
+        // a definite non-delivery. Refresh before any new user action.
+        if case ArgoClientError.http(status: 404, _, _) = error { return .unknown(text) }
+        switch error {
+        case ArgoClientError.notSent, is CancellationError: return .notSent(text)
+        default: return .rejected(text)
+        }
+    }
+
+    /// Reads the actual card and latest native conversation after a receipt,
+    /// or on the user's explicit refresh after an unknown result. No POST is
+    /// made here, and only a fully successful read marks an unknown as reviewed.
+    func refreshModelRecovery() {
+        guard let state = conversation, let operation = state.modelRecovery,
+              operation.status != .sending, status.isConnected, let connection,
+              state.beginModelRecoveryRefresh(operation.id) else { return }
+        chatTask?.cancel()
+        historyTask?.cancel()
+        listTask?.cancel()
+        chatEpoch = UUID()
+        listEpoch = UUID()
+        let epoch = chatEpoch
+        let recoveryList = listEpoch
+        refreshingAgents = true
+        state.followingLatest = true
+        historyTask = Task { [weak self] in
+            guard let self else { return }
+            var succeeded = false
+            var problem: String?
+            defer {
+                if listEpoch == recoveryList { refreshingAgents = false }
+                if epoch == chatEpoch {
+                    if succeeded { state.finishModelRecoveryRefresh(operation.id) }
+                    else { state.failModelRecoveryRefresh(operation.id, problem: problem) }
+                    if currentChat(state, epoch), listEpoch == recoveryList {
+                        startAgentPolling()
+                        startConversationPolling()
+                    }
+                }
+                pruneConversations()
+            }
+            @MainActor func readCards() async throws -> [ArgoAgentCard] {
+                defer { if listEpoch == recoveryList { refreshingAgents = false } }
+                return try await connection.agents(workspace: state.key.workspace)
+            }
+            do {
+                async let cards = readCards()
+                async let team = connection.team(run: state.key.run)
+                async let queue = connection.queue(run: state.key.run)
+                let current = try await (cards, team, queue)
+                try Task.checkCancellation()
+                guard currentChat(state, epoch), listEpoch == recoveryList else { return }
+                agents = current.0
+                state.team = current.1
+                state.queue = current.2
+                try await readChat(state, from: connection, cursor: .latest, epoch: epoch)
+                try Task.checkCancellation()
+                guard currentChat(state, epoch), listEpoch == recoveryList else { return }
+                succeeded = true
+            } catch {
+                guard !Task.isCancelled, currentChat(state, epoch), listEpoch == recoveryList else { return }
+                problem = L10n.error(error)
+                if isConnectionFailure(error) { failConnection(error) }
+            }
+        }
+    }
+
+    private func deliver(_ operation: PendingDelivery.Operation, in state: ConversationState, using connection: ArgoConnection,
+                         attachments: [SentAttachment] = []) {
+        state.append(PendingDelivery(id: operation.attempt, operation: operation, attachments: attachments))
+        perform(operation, in: state, using: connection)
+    }
+
+    private func perform(_ operation: PendingDelivery.Operation, in state: ConversationState, using connection: ArgoConnection) {
+        let epoch = hostEpoch
+        sends[operation.attempt] = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                sends[operation.attempt] = nil
+                pruneConversations()
+            }
+            do {
+                try Task.checkCancellation()
+                switch operation {
+                case .message(let message):
+                    let receipt = try await connection.send(message)
+                    state.record(receipt, for: operation.attempt)
+                case .reply(let ask, let terminal, let text, let attempt):
+                    let receipt = try await connection.reply(ask, terminal: terminal, text: text, attempt: attempt)
+                    guard receipt.status == "sent", receipt.id == ask.questionID else {
+                        throw ArgoClientError.deliveryUnknown(.message("The host returned an unrecognized answer receipt."))
+                    }
+                    state.recordReply(to: ask, for: operation.attempt)
+                }
+                // Automatic refresh follows the user's current visible window.
+                if isCurrentHost(epoch), conversationVisible,
+                   selectedKey == state.key, state.followingLatest {
+                    showLatest()
+                }
+            } catch {
+                // A late receipt changes only its original conversation, even after a host switch.
+                let result: PendingDelivery.Status
+                if (error as? ArgoClientError)?.mayHaveBeenDelivered == true {
+                    result = .unknown(L10n.error(error))
+                } else {
+                    switch error {
+                    case ArgoClientError.notSent, is CancellationError: result = .notSent(L10n.error(error))
+                    default: result = .rejected(L10n.error(error))
+                    }
+                }
+                recordFailure(result, for: operation.attempt, in: state)
+                if isCurrentHost(epoch), !Task.isCancelled, isConnectionFailure(error) { failConnection(error) }
+            }
+        }
+    }
+
+    private func recordFailure(_ result: PendingDelivery.Status, for id: String, in state: ConversationState) {
+        guard let previous = state.deliveries.first(where: { $0.id == id })?.status else { return }
+        state.setStatus(result, for: id)
+        guard active, conversationVisible, selectedKey == state.key else { return }
+        switch result {
+        case .unknown:
+            if case .unknown = previous { return }
+            announce(L10n.text("Delivery unknown. Open Delivery Receipts to Refresh Conversation or Copy. Refresh before sending again."))
+        case .notSent:
+            if case .notSent = previous { return }
+            announce(L10n.text("Message not sent. Open Delivery Receipts to Retry Sending or Copy."))
+        default: break
+        }
+    }
+
+    func pair(code: String, name: String, deviceName: String) {
+        guard pairTask == nil, active else { return }
+        pairing = true
+        pairingProblem = nil
+        pairedHostID = nil
+        pairTask = Task { [weak self] in
+            guard let self else { return }
+            defer { pairing = false; pairTask = nil }
+            do {
+                let paired = try await store.pair(code: code, deviceName: deviceName, name: name)
+                try Task.checkCancellation()
+                let updatedHosts = try await store.hosts()
+                try Task.checkCancellation()
+                hosts = updatedHosts
+                pairedHostID = paired.id
+                if hostID == paired.id { reconnect() } else { selectHost(paired.id) }
+            } catch is CancellationError {
+                // Persistence may already have completed; cancellation only stops UI completion.
+            } catch {
+                guard !Task.isCancelled, active else { return }
+                pairingProblem = L10n.error(error)
+            }
+        }
+    }
+
+    func cancelPairing() { pairTask?.cancel() }
+
+    private func isCurrentHost(_ epoch: UUID) -> Bool { active && epoch == hostEpoch && !Task.isCancelled }
+    private func currentChat(_ state: ConversationState, _ epoch: UUID) -> Bool {
+        active && conversationVisible && selectedKey == state.key && epoch == chatEpoch && !Task.isCancelled
+    }
+
+    private func isConnectionFailure(_ error: Error) -> Bool {
+        switch error {
+        case ArgoClientError.gateway, ArgoClientError.closed, ArgoClientError.needsPairing,
+             ArgoClientError.unsupportedServer: true
+        default: false
+        }
+    }
+
+    private func failConnection(_ error: Error) {
+        let shouldAnnounce = active && status.problem == nil
+        let needsPairing: Bool
+        if case ArgoClientError.needsPairing = error { needsPairing = true } else { needsPairing = false }
+        invalidateConnection()
+        status = .failed(L10n.error(error), needsPairing: needsPairing)
+        if shouldAnnounce {
+            announce(L10n.text(needsPairing ? "Disconnected. Choose Pair Again to reconnect." : "Disconnected. Choose Retry to reconnect."))
+        }
+    }
+
+    /// Bound host-backed windows across the whole app. User work, answer claims,
+    /// unresolved deliveries and in-flight operations keep their original state.
+    private func pruneConversations() {
+        conversationOrder.removeAll { conversations[$0] == nil }
+        var retained = selectedKey == nil ? 0 : 1
+        var remove: [SessionKey] = []
+        for key in conversationOrder.reversed() where key != selectedKey {
+            guard let state = conversations[key], !state.isSending, !state.isInterruptBusy,
+                  state.modelRecovery?.refreshing != true else { continue }
+            if retained < Self.retainedTranscriptLimit {
+                retained += 1
+                continue
+            }
+            if state.hasNonReloadableState {
+                if state.transcript.identity != nil || state.transcript.waiting != nil ||
+                    state.team != nil || state.queue != nil || state.problem != nil ||
+                    state.deliveries.contains(where: { $0.status.isKnownSuccess }) {
+                    state.releaseReloadableContent()
+                }
+            } else {
+                remove.append(key)
+            }
+        }
+        for key in remove { conversations.removeValue(forKey: key) }
+        conversationOrder.removeAll { conversations[$0] == nil }
+    }
+
+    private func cancelSends() {
+        conversation?.cancelAttachmentWork()
+        for task in sends.values { task.cancel() }
+        seenEpoch = UUID()
+        seenTask?.cancel()
+        seenTask = nil
+    }
+
+    private func cancelConversationRequests() {
+        chatEpoch = UUID()
+        chatTask?.cancel()
+        historyTask?.cancel()
+        conversation?.loadingOlder = false
+        conversation?.modelRecovery?.refreshing = false
+        cancelSends()
+        for task in interrupts.values { task.cancel() }
+    }
+
+    private func invalidateConnection() {
+        hostEpoch = UUID()
+        listEpoch = UUID()
+        connectTask?.cancel()
+        listTask?.cancel()
+        cancelConversationRequests()
+        conversation?.seenSignature = nil
+        loadingAgents = false
+        refreshingAgents = false
+        let old = connection
+        connection = nil
+        if let old { Task { await old.close() } }
+    }
+}

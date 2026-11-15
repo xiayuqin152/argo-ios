@@ -1,0 +1,723 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		001C6542CCAEB05FBDA51E8D /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE3399FA3F1012754F25805 /* Palette.swift */; };
+		02DB613F651A8EE238FAE3A4 /* Localizable.stringsdict in Resources */ = {isa = PBXBuildFile; fileRef = EDBD3FEC5D74A5282ED22EDB /* Localizable.stringsdict */; };
+		046F871EC463A6BFD9A844BC /* QuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B125622556FF4C70A3C6A78D /* QuestionCard.swift */; };
+		07DED39F74EB0C8E89DB083A /* ReplyBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F9AA97EE369F8CA6117E03 /* ReplyBlocks.swift */; };
+		0F33E997A108860B79DCE48F /* TypedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD258AC9FAD479F354BA246A /* TypedText.swift */; };
+		12E1861F7A7F71BDA453838B /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5476DF94D49F55551FC0F5C7 /* Components.swift */; };
+		1490BC2F1CDD7E158B61F3B7 /* Persona-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = C1561344AF344D991C0C0AFC /* Persona-LICENSE.txt */; };
+		1C87BB8C0FA6A7174CAD580F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB0FAEFD3F0B3A83734A327 /* ChatView.swift */; };
+		21CC358104BB5E3360031BDA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE413F4EB8A4A2B0E9C5CE /* SettingsView.swift */; };
+		25995BC6B8AA344CC52A7787 /* NewChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE9952A3A0B5F8AFCBE4FBEB /* NewChatView.swift */; };
+		2F24C37D18F2538613143EEB /* Notice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC2D30442132D94CDC9B2ECC /* Notice.swift */; };
+		2F7D777E8E823AEAA1A87EBB /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E8152D41205EF283D2D9332 /* L10n.swift */; };
+		37EA050AD9CC3CC206B7AD5F /* AttachSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DDCFF0CEFCEFA836A9D6C66 /* AttachSheet.swift */; };
+		38FCAE9D13175EC02C1CD5ED /* AgentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858353FF4732A82B62C67F7C /* AgentSession.swift */; };
+		45A81A5BBB476C9D96DF7944 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62C047E91D085D0FDA66ED1 /* Theme.swift */; };
+		4D8562B077F38FC0DD1AC1B4 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92E874AFA6724E3F1136C372 /* PairingView.swift */; };
+		51072ABA92CD08A5F54E2E60 /* AgentMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9170864C23A3DA18A830DCC8 /* AgentMark.swift */; };
+		5930DA5CD619220FA95B821C /* BeautifulUI-NOTICE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A41E289FEFC6D8A430CCBD92 /* BeautifulUI-NOTICE.txt */; };
+		593C72D6B47C1CB79CA790A2 /* ArgoMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 97B5A70D14876650247403E5 /* ArgoMobileKit */; };
+		5DFFFF5C18FDBF9C307BAF2D /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 4853A43A4E160FAE0A178E47 /* InfoPlist.strings */; };
+		66C1B1072EB900DD7E7C52DF /* ComposerButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8A994209FF16A41238B886 /* ComposerButtons.swift */; };
+		6789CE088C3E1FDF5409DC1D /* MessageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 768D8F71E02F069A953C07CA /* MessageViews.swift */; };
+		6C5C841B5132D070FB280F9E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0864C4B497BAC98525F38EFE /* RootView.swift */; };
+		6F0F08D9E0CCB13E9B2ED1C6 /* ChatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45455F12915E6F4C277A9BE6 /* ChatsView.swift */; };
+		794AD9F764E2E8E43579755C /* AttachmentViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D249701D36524FD1383E271 /* AttachmentViewer.swift */; };
+		7D77F49E36220FB745E2EB55 /* BeautifulUI-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A446782683E53472384ED850 /* BeautifulUI-LICENSE.txt */; };
+		87605B2AD397BA9829BB7048 /* ThemedIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E023011C828B3536CDE6283 /* ThemedIcon.swift */; };
+		879BA23CAC38EFAD2C399694 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F26FC963A510E99A69467AAD /* Localizable.strings */; };
+		8A086F15493DE2952AEDEAF8 /* NewSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6C3184F84261D67C205BE99 /* NewSessionState.swift */; };
+		8A5679F6A37D31BB56B5DF46 /* CapsuleFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D576C08CD1593061C59B8199 /* CapsuleFilterBar.swift */; };
+		8E22EAD131236DC9580A1720 /* HostWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0B7C9B821CEF1DB908F5FB /* HostWorkspaceView.swift */; };
+		A5B94746F98C62EA8E82A785 /* StatusPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFE6EF80BC586878F6C0EE2 /* StatusPalette.swift */; };
+		A94CFE891F688BA8DB22E6BD /* BeautifulUI-LICENSE-beautifului.txt in Resources */ = {isa = PBXBuildFile; fileRef = FBEEA9FBB094AAC00A8D4AC8 /* BeautifulUI-LICENSE-beautifului.txt */; };
+		AAA9F4025842D3208147363A /* ReadingSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 657541B71F940A7EBB31ED93 /* ReadingSize.swift */; };
+		AD1E27DEEAC98EECACC843EF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1878EEE92DAD6E797D36B196 /* Assets.xcassets */; };
+		B3A17FABA609195B8939DD67 /* ModelRecoveryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D3F3721DEE6F64A3AA70862 /* ModelRecoveryState.swift */; };
+		B3DC00118EE4441279163951 /* TextSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6499BF5A03D9E9EFF1C10771 /* TextSize.swift */; };
+		B4A8454ECA617412DD966687 /* ModelRecoveryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE72D8AE94868B413C2F95A8 /* ModelRecoveryCard.swift */; };
+		B4D6E840AC7DA970BDDFFF8A /* TurnAttachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE763B4FEE14D17D93570CE /* TurnAttachments.swift */; };
+		C260A33C89D67807DFCE5238 /* BesideOrUnder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0B045F5A588D2CE3C21F12 /* BesideOrUnder.swift */; };
+		C95F80F6C80FC457B4A62452 /* AttachmentDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B69CA332B8E44782AE2C6EA7 /* AttachmentDraft.swift */; };
+		CFB3E2F33F298D0E12D38AE8 /* DrawerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 023E881593474DB8DD120260 /* DrawerLayout.swift */; };
+		D6093A2D939A79C1A9720228 /* ToolViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C4BC1F68C86A80AA62E0ABF /* ToolViews.swift */; };
+		D9B26EBC748B9D2C3D3B8D1E /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA967F4879643326DBD2F60A /* AppModel.swift */; };
+		E0E2463BE80263B1981776E0 /* AgentRowStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7138B94FE76C38E60E2D332 /* AgentRowStyles.swift */; };
+		E1FD2C87041A5147B26C7C26 /* AttachmentSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE515DBE1B37BF560AD00E8C /* AttachmentSources.swift */; };
+		EA0201E75A12E496FA119C9E /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73503A7A707DD4678848B0DB /* Icons.swift */; };
+		F37DFDFDBBF82EA7ECB840FC /* ArgoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD815D8D8A18CA3F2D7AA64A /* ArgoApp.swift */; };
+		F4C665CA92957A138CF6BC70 /* BeautifulUI in Frameworks */ = {isa = PBXBuildFile; productRef = FFC57DDA1D6C073D3F5D837E /* BeautifulUI */; };
+		F5E306456F194FAF28081363 /* ComposerParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF13FA550140AF587F6D2DF6 /* ComposerParts.swift */; };
+		F7EB8C8FA58C7C6974BE8B92 /* PromptComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFB42AF9132A8884C25D9295 /* PromptComposer.swift */; };
+		F7F3730C58DF6619FE61E0BD /* ConversationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CA4639289CEC1083E00D99C /* ConversationState.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		023E881593474DB8DD120260 /* DrawerLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerLayout.swift; sourceTree = "<group>"; };
+		0864C4B497BAC98525F38EFE /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		096D095B8C709CB8A29C8191 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		0D3F3721DEE6F64A3AA70862 /* ModelRecoveryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelRecoveryState.swift; sourceTree = "<group>"; };
+		0DDCFF0CEFCEFA836A9D6C66 /* AttachSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachSheet.swift; sourceTree = "<group>"; };
+		1878EEE92DAD6E797D36B196 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1DFE6EF80BC586878F6C0EE2 /* StatusPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPalette.swift; sourceTree = "<group>"; };
+		2FB0FAEFD3F0B3A83734A327 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		3AE3399FA3F1012754F25805 /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
+		3FF82EC0C3503CB855180DF8 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		45455F12915E6F4C277A9BE6 /* ChatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatsView.swift; sourceTree = "<group>"; };
+		4C0B045F5A588D2CE3C21F12 /* BesideOrUnder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BesideOrUnder.swift; sourceTree = "<group>"; };
+		4CA4639289CEC1083E00D99C /* ConversationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationState.swift; sourceTree = "<group>"; };
+		4E8152D41205EF283D2D9332 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
+		5476DF94D49F55551FC0F5C7 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		5D047BCF0BB17C5B47165DD9 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		5E023011C828B3536CDE6283 /* ThemedIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedIcon.swift; sourceTree = "<group>"; };
+		6499BF5A03D9E9EFF1C10771 /* TextSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSize.swift; sourceTree = "<group>"; };
+		657541B71F940A7EBB31ED93 /* ReadingSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSize.swift; sourceTree = "<group>"; };
+		6C4BC1F68C86A80AA62E0ABF /* ToolViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolViews.swift; sourceTree = "<group>"; };
+		6D249701D36524FD1383E271 /* AttachmentViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentViewer.swift; sourceTree = "<group>"; };
+		73503A7A707DD4678848B0DB /* Icons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Icons.swift; sourceTree = "<group>"; };
+		768D8F71E02F069A953C07CA /* MessageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageViews.swift; sourceTree = "<group>"; };
+		7D0B7C9B821CEF1DB908F5FB /* HostWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostWorkspaceView.swift; sourceTree = "<group>"; };
+		81F9AA97EE369F8CA6117E03 /* ReplyBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyBlocks.swift; sourceTree = "<group>"; };
+		858353FF4732A82B62C67F7C /* AgentSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSession.swift; sourceTree = "<group>"; };
+		9170864C23A3DA18A830DCC8 /* AgentMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMark.swift; sourceTree = "<group>"; };
+		92E874AFA6724E3F1136C372 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		A41E289FEFC6D8A430CCBD92 /* BeautifulUI-NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "BeautifulUI-NOTICE.txt"; sourceTree = "<group>"; };
+		A446782683E53472384ED850 /* BeautifulUI-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "BeautifulUI-LICENSE.txt"; sourceTree = "<group>"; };
+		AD258AC9FAD479F354BA246A /* TypedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedText.swift; sourceTree = "<group>"; };
+		AD815D8D8A18CA3F2D7AA64A /* ArgoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArgoApp.swift; sourceTree = "<group>"; };
+		B125622556FF4C70A3C6A78D /* QuestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionCard.swift; sourceTree = "<group>"; };
+		B69CA332B8E44782AE2C6EA7 /* AttachmentDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDraft.swift; sourceTree = "<group>"; };
+		C1561344AF344D991C0C0AFC /* Persona-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Persona-LICENSE.txt"; sourceTree = "<group>"; };
+		C2B7ED034B4F42E44CD0B630 /* Argo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Argo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CD15F7EABAE03369FA5A1865 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		CEE763B4FEE14D17D93570CE /* TurnAttachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnAttachments.swift; sourceTree = "<group>"; };
+		D576C08CD1593061C59B8199 /* CapsuleFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapsuleFilterBar.swift; sourceTree = "<group>"; };
+		D5F1E76F424A03BCB7F885DB /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = en; path = en.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
+		D62C047E91D085D0FDA66ED1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		D7138B94FE76C38E60E2D332 /* AgentRowStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRowStyles.swift; sourceTree = "<group>"; };
+		DA967F4879643326DBD2F60A /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		DE515DBE1B37BF560AD00E8C /* AttachmentSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSources.swift; sourceTree = "<group>"; };
+		DFB42AF9132A8884C25D9295 /* PromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptComposer.swift; sourceTree = "<group>"; };
+		E6893181F15C733A14CE00BB /* ArgoMobileKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ArgoMobileKit; path = Packages/ArgoMobileKit; sourceTree = SOURCE_ROOT; };
+		E6C3184F84261D67C205BE99 /* NewSessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionState.swift; sourceTree = "<group>"; };
+		EE05114FDA43EF8C508480D6 /* BeautifulUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BeautifulUI; path = ThirdParty/BeautifulUI; sourceTree = SOURCE_ROOT; };
+		EE9952A3A0B5F8AFCBE4FBEB /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
+		EF8A994209FF16A41238B886 /* ComposerButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerButtons.swift; sourceTree = "<group>"; };
+		F3BE413F4EB8A4A2B0E9C5CE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FBEEA9FBB094AAC00A8D4AC8 /* BeautifulUI-LICENSE-beautifului.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "BeautifulUI-LICENSE-beautifului.txt"; sourceTree = "<group>"; };
+		FC2D30442132D94CDC9B2ECC /* Notice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notice.swift; sourceTree = "<group>"; };
+		FE72D8AE94868B413C2F95A8 /* ModelRecoveryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelRecoveryCard.swift; sourceTree = "<group>"; };
+		FF13FA550140AF587F6D2DF6 /* ComposerParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerParts.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E3173D97F2B9EDA8556BBC12 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				593C72D6B47C1CB79CA790A2 /* ArgoMobileKit in Frameworks */,
+				F4C665CA92957A138CF6BC70 /* BeautifulUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0309C9210E2F046A6B6A3695 = {
+			isa = PBXGroup;
+			children = (
+				FDC73D9A9404939E5DE7809F /* Argo */,
+				3115DEA6589F5B2D7F6EB7EC /* Packages */,
+				53B1F2EB4E6A2E842F2ED825 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		0DF475D3C2CE5CD5A9BD3568 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				73503A7A707DD4678848B0DB /* Icons.swift */,
+				3AE3399FA3F1012754F25805 /* Palette.swift */,
+				1DFE6EF80BC586878F6C0EE2 /* StatusPalette.swift */,
+				D62C047E91D085D0FDA66ED1 /* Theme.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		0E7AD44894685F79CE53F9AD /* Licenses */ = {
+			isa = PBXGroup;
+			children = (
+				FBEEA9FBB094AAC00A8D4AC8 /* BeautifulUI-LICENSE-beautifului.txt */,
+				A446782683E53472384ED850 /* BeautifulUI-LICENSE.txt */,
+				A41E289FEFC6D8A430CCBD92 /* BeautifulUI-NOTICE.txt */,
+				C1561344AF344D991C0C0AFC /* Persona-LICENSE.txt */,
+			);
+			path = Licenses;
+			sourceTree = "<group>";
+		};
+		3115DEA6589F5B2D7F6EB7EC /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				E6893181F15C733A14CE00BB /* ArgoMobileKit */,
+				EE05114FDA43EF8C508480D6 /* BeautifulUI */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		43C52A11D187EBE848F810F4 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				4E8152D41205EF283D2D9332 /* L10n.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		53B1F2EB4E6A2E842F2ED825 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C2B7ED034B4F42E44CD0B630 /* Argo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		53C263C1D2CCFB9EA532A922 /* Attachments */ = {
+			isa = PBXGroup;
+			children = (
+				DE515DBE1B37BF560AD00E8C /* AttachmentSources.swift */,
+				6D249701D36524FD1383E271 /* AttachmentViewer.swift */,
+			);
+			path = Attachments;
+			sourceTree = "<group>";
+		};
+		6D37294F6821597EA2F54919 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				9170864C23A3DA18A830DCC8 /* AgentMark.swift */,
+				4C0B045F5A588D2CE3C21F12 /* BesideOrUnder.swift */,
+				D576C08CD1593061C59B8199 /* CapsuleFilterBar.swift */,
+				5476DF94D49F55551FC0F5C7 /* Components.swift */,
+				EF8A994209FF16A41238B886 /* ComposerButtons.swift */,
+				FC2D30442132D94CDC9B2ECC /* Notice.swift */,
+				657541B71F940A7EBB31ED93 /* ReadingSize.swift */,
+				6499BF5A03D9E9EFF1C10771 /* TextSize.swift */,
+				5E023011C828B3536CDE6283 /* ThemedIcon.swift */,
+				AD258AC9FAD479F354BA246A /* TypedText.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		8651AA52AD31F27DC23C4AF1 /* Chats */ = {
+			isa = PBXGroup;
+			children = (
+				D7138B94FE76C38E60E2D332 /* AgentRowStyles.swift */,
+				45455F12915E6F4C277A9BE6 /* ChatsView.swift */,
+			);
+			path = Chats;
+			sourceTree = "<group>";
+		};
+		9A9018FAD06FD93A35D0454F /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				0864C4B497BAC98525F38EFE /* RootView.swift */,
+				CC20DB22A4662D130C8E3BE2 /* Chat */,
+				8651AA52AD31F27DC23C4AF1 /* Chats */,
+				F20987E8ED2CF20FE14E0B0B /* Connection */,
+				A1CC9CF79C7FD4FEF160A676 /* NewChat */,
+				E5D01C2CE82AA61C48E20660 /* Settings */,
+				CFB969BC2AD9CBC2A95F91D2 /* Shell */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A1CC9CF79C7FD4FEF160A676 /* NewChat */ = {
+			isa = PBXGroup;
+			children = (
+				EE9952A3A0B5F8AFCBE4FBEB /* NewChatView.swift */,
+			);
+			path = NewChat;
+			sourceTree = "<group>";
+		};
+		CC20DB22A4662D130C8E3BE2 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				0DDCFF0CEFCEFA836A9D6C66 /* AttachSheet.swift */,
+				2FB0FAEFD3F0B3A83734A327 /* ChatView.swift */,
+				FF13FA550140AF587F6D2DF6 /* ComposerParts.swift */,
+				768D8F71E02F069A953C07CA /* MessageViews.swift */,
+				FE72D8AE94868B413C2F95A8 /* ModelRecoveryCard.swift */,
+				DFB42AF9132A8884C25D9295 /* PromptComposer.swift */,
+				B125622556FF4C70A3C6A78D /* QuestionCard.swift */,
+				81F9AA97EE369F8CA6117E03 /* ReplyBlocks.swift */,
+				6C4BC1F68C86A80AA62E0ABF /* ToolViews.swift */,
+				CEE763B4FEE14D17D93570CE /* TurnAttachments.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		CFB969BC2AD9CBC2A95F91D2 /* Shell */ = {
+			isa = PBXGroup;
+			children = (
+				023E881593474DB8DD120260 /* DrawerLayout.swift */,
+			);
+			path = Shell;
+			sourceTree = "<group>";
+		};
+		E5D01C2CE82AA61C48E20660 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				F3BE413F4EB8A4A2B0E9C5CE /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		EA0B1457A02680F6680F4CC1 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				858353FF4732A82B62C67F7C /* AgentSession.swift */,
+				DA967F4879643326DBD2F60A /* AppModel.swift */,
+				B69CA332B8E44782AE2C6EA7 /* AttachmentDraft.swift */,
+				4CA4639289CEC1083E00D99C /* ConversationState.swift */,
+				0D3F3721DEE6F64A3AA70862 /* ModelRecoveryState.swift */,
+				E6C3184F84261D67C205BE99 /* NewSessionState.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		F20987E8ED2CF20FE14E0B0B /* Connection */ = {
+			isa = PBXGroup;
+			children = (
+				7D0B7C9B821CEF1DB908F5FB /* HostWorkspaceView.swift */,
+				92E874AFA6724E3F1136C372 /* PairingView.swift */,
+			);
+			path = Connection;
+			sourceTree = "<group>";
+		};
+		F2A2D62698BA0CEEF0D32812 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				1878EEE92DAD6E797D36B196 /* Assets.xcassets */,
+				4853A43A4E160FAE0A178E47 /* InfoPlist.strings */,
+				0E7AD44894685F79CE53F9AD /* Licenses */,
+				F26FC963A510E99A69467AAD /* Localizable.strings */,
+				EDBD3FEC5D74A5282ED22EDB /* Localizable.stringsdict */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		FDC73D9A9404939E5DE7809F /* Argo */ = {
+			isa = PBXGroup;
+			children = (
+				AD815D8D8A18CA3F2D7AA64A /* ArgoApp.swift */,
+				53C263C1D2CCFB9EA532A922 /* Attachments */,
+				0DF475D3C2CE5CD5A9BD3568 /* Design */,
+				6D37294F6821597EA2F54919 /* DesignSystem */,
+				EA0B1457A02680F6680F4CC1 /* Model */,
+				F2A2D62698BA0CEEF0D32812 /* Resources */,
+				43C52A11D187EBE848F810F4 /* Support */,
+				9A9018FAD06FD93A35D0454F /* Views */,
+			);
+			path = Argo;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6886E89928701DD552987CFE /* Argo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2601836114CA1A81459D5267 /* Build configuration list for PBXNativeTarget "Argo" */;
+			buildPhases = (
+				A6AA8B7BB08D0A948BC088F7 /* Sources */,
+				48FE2CF60B9E51289563DB80 /* Resources */,
+				E3173D97F2B9EDA8556BBC12 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Argo;
+			packageProductDependencies = (
+				97B5A70D14876650247403E5 /* ArgoMobileKit */,
+				FFC57DDA1D6C073D3F5D837E /* BeautifulUI */,
+			);
+			productName = Argo;
+			productReference = C2B7ED034B4F42E44CD0B630 /* Argo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		10B6E024CC3BDAE211D3567A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					6886E89928701DD552987CFE = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 2C5D793167B6BE9F2A832AD6 /* Build configuration list for PBXProject "Argo" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+				"zh-Hans",
+			);
+			mainGroup = 0309C9210E2F046A6B6A3695;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C3A5C8A0E34F25AB327902FC /* XCLocalSwiftPackageReference "Packages/ArgoMobileKit" */,
+				B9AEFB1561F25A9B4BE3370F /* XCLocalSwiftPackageReference "ThirdParty/BeautifulUI" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 53B1F2EB4E6A2E842F2ED825 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6886E89928701DD552987CFE /* Argo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		48FE2CF60B9E51289563DB80 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD1E27DEEAC98EECACC843EF /* Assets.xcassets in Resources */,
+				A94CFE891F688BA8DB22E6BD /* BeautifulUI-LICENSE-beautifului.txt in Resources */,
+				7D77F49E36220FB745E2EB55 /* BeautifulUI-LICENSE.txt in Resources */,
+				5930DA5CD619220FA95B821C /* BeautifulUI-NOTICE.txt in Resources */,
+				5DFFFF5C18FDBF9C307BAF2D /* InfoPlist.strings in Resources */,
+				879BA23CAC38EFAD2C399694 /* Localizable.strings in Resources */,
+				02DB613F651A8EE238FAE3A4 /* Localizable.stringsdict in Resources */,
+				1490BC2F1CDD7E158B61F3B7 /* Persona-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A6AA8B7BB08D0A948BC088F7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				51072ABA92CD08A5F54E2E60 /* AgentMark.swift in Sources */,
+				E0E2463BE80263B1981776E0 /* AgentRowStyles.swift in Sources */,
+				38FCAE9D13175EC02C1CD5ED /* AgentSession.swift in Sources */,
+				D9B26EBC748B9D2C3D3B8D1E /* AppModel.swift in Sources */,
+				F37DFDFDBBF82EA7ECB840FC /* ArgoApp.swift in Sources */,
+				37EA050AD9CC3CC206B7AD5F /* AttachSheet.swift in Sources */,
+				C95F80F6C80FC457B4A62452 /* AttachmentDraft.swift in Sources */,
+				E1FD2C87041A5147B26C7C26 /* AttachmentSources.swift in Sources */,
+				794AD9F764E2E8E43579755C /* AttachmentViewer.swift in Sources */,
+				C260A33C89D67807DFCE5238 /* BesideOrUnder.swift in Sources */,
+				8A5679F6A37D31BB56B5DF46 /* CapsuleFilterBar.swift in Sources */,
+				1C87BB8C0FA6A7174CAD580F /* ChatView.swift in Sources */,
+				6F0F08D9E0CCB13E9B2ED1C6 /* ChatsView.swift in Sources */,
+				12E1861F7A7F71BDA453838B /* Components.swift in Sources */,
+				66C1B1072EB900DD7E7C52DF /* ComposerButtons.swift in Sources */,
+				F5E306456F194FAF28081363 /* ComposerParts.swift in Sources */,
+				F7F3730C58DF6619FE61E0BD /* ConversationState.swift in Sources */,
+				CFB3E2F33F298D0E12D38AE8 /* DrawerLayout.swift in Sources */,
+				8E22EAD131236DC9580A1720 /* HostWorkspaceView.swift in Sources */,
+				EA0201E75A12E496FA119C9E /* Icons.swift in Sources */,
+				2F7D777E8E823AEAA1A87EBB /* L10n.swift in Sources */,
+				6789CE088C3E1FDF5409DC1D /* MessageViews.swift in Sources */,
+				B4A8454ECA617412DD966687 /* ModelRecoveryCard.swift in Sources */,
+				B3A17FABA609195B8939DD67 /* ModelRecoveryState.swift in Sources */,
+				25995BC6B8AA344CC52A7787 /* NewChatView.swift in Sources */,
+				8A086F15493DE2952AEDEAF8 /* NewSessionState.swift in Sources */,
+				2F24C37D18F2538613143EEB /* Notice.swift in Sources */,
+				4D8562B077F38FC0DD1AC1B4 /* PairingView.swift in Sources */,
+				001C6542CCAEB05FBDA51E8D /* Palette.swift in Sources */,
+				F7EB8C8FA58C7C6974BE8B92 /* PromptComposer.swift in Sources */,
+				046F871EC463A6BFD9A844BC /* QuestionCard.swift in Sources */,
+				AAA9F4025842D3208147363A /* ReadingSize.swift in Sources */,
+				07DED39F74EB0C8E89DB083A /* ReplyBlocks.swift in Sources */,
+				6C5C841B5132D070FB280F9E /* RootView.swift in Sources */,
+				21CC358104BB5E3360031BDA /* SettingsView.swift in Sources */,
+				A5B94746F98C62EA8E82A785 /* StatusPalette.swift in Sources */,
+				B3DC00118EE4441279163951 /* TextSize.swift in Sources */,
+				45A81A5BBB476C9D96DF7944 /* Theme.swift in Sources */,
+				87605B2AD397BA9829BB7048 /* ThemedIcon.swift in Sources */,
+				D6093A2D939A79C1A9720228 /* ToolViews.swift in Sources */,
+				B4D6E840AC7DA970BDDFFF8A /* TurnAttachments.swift in Sources */,
+				0F33E997A108860B79DCE48F /* TypedText.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		4853A43A4E160FAE0A178E47 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				CD15F7EABAE03369FA5A1865 /* en */,
+				096D095B8C709CB8A29C8191 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		EDBD3FEC5D74A5282ED22EDB /* Localizable.stringsdict */ = {
+			isa = PBXVariantGroup;
+			children = (
+				D5F1E76F424A03BCB7F885DB /* en */,
+			);
+			name = Localizable.stringsdict;
+			sourceTree = "<group>";
+		};
+		F26FC963A510E99A69467AAD /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				3FF82EC0C3503CB855180DF8 /* en */,
+				5D047BCF0BB17C5B47165DD9 /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		5B3CD9C2036F2C741247CC7B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Argo;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Argo connects to paired development computers on your local network to read workspaces, Agent progress, and messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Argo shows recent photos you allow so you can choose images to send to your paired development computer.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.argo.ios;
+				PRODUCT_NAME = Argo;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A66D1992063FCED135F9BA16 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Argo;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Argo connects to paired development computers on your local network to read workspaces, Agent progress, and messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Argo shows recent photos you allow so you can choose images to send to your paired development computer.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.argo.ios;
+				PRODUCT_NAME = Argo;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B6FAFF67E150EB459BCF2090 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		FD4FA436A84A297C11FE2BBA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2601836114CA1A81459D5267 /* Build configuration list for PBXNativeTarget "Argo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A66D1992063FCED135F9BA16 /* Debug */,
+				5B3CD9C2036F2C741247CC7B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2C5D793167B6BE9F2A832AD6 /* Build configuration list for PBXProject "Argo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD4FA436A84A297C11FE2BBA /* Debug */,
+				B6FAFF67E150EB459BCF2090 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B9AEFB1561F25A9B4BE3370F /* XCLocalSwiftPackageReference "ThirdParty/BeautifulUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ThirdParty/BeautifulUI;
+		};
+		C3A5C8A0E34F25AB327902FC /* XCLocalSwiftPackageReference "Packages/ArgoMobileKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ArgoMobileKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		97B5A70D14876650247403E5 /* ArgoMobileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArgoMobileKit;
+		};
+		FFC57DDA1D6C073D3F5D837E /* BeautifulUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BeautifulUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 10B6E024CC3BDAE211D3567A /* Project object */;
+}

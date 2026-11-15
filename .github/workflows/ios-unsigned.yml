@@ -1,0 +1,114 @@
+name: Argo iOS unsigned
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record source, runner, Xcode, Swift and SDKs
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/argo-ios/logs" "$RUNNER_TEMP/argo-ios/packages" "$RUNNER_TEMP/argo-ios/results"
+          {
+            printf 'ImageOS=%s\nImageVersion=%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+            git rev-parse HEAD
+            sw_vers
+            uname -m
+            xcodebuild -version
+            xcrun swift --version
+            xcodebuild -showsdks
+            xcrun --sdk iphoneos --show-sdk-version
+          } 2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/toolchain.log"
+
+      - name: Prepare XcodeGen 2.46.0
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip \
+            -o "$RUNNER_TEMP/argo-ios/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/argo-ios/xcodegen.zip" -d "$RUNNER_TEMP/argo-ios/tools"
+          echo "$RUNNER_TEMP/argo-ios/tools/xcodegen/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/argo-ios/tools/xcodegen/bin/xcodegen" --version \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/xcodegen.log"
+
+      - name: Generate and validate the Argo project
+        run: |
+          set -euo pipefail
+          sh ios/scripts/generate.sh \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/project-generate.log"
+
+      - name: Archive Argo for iPhone without signing
+        run: |
+          set -euo pipefail
+          xcodebuild -jobs 2 -project ios/Argo.xcodeproj -scheme Argo \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/argo-ios/device" \
+            -resultBundlePath "$RUNNER_TEMP/argo-ios/results/Argo-archive.xcresult" \
+            -archivePath "$RUNNER_TEMP/argo-ios/Argo-iphoneos-unsigned.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
+            archive 2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/iphoneos-archive.log"
+
+      - name: Package the unsigned archive and IPA
+        run: |
+          set -euo pipefail
+          tar -C "$RUNNER_TEMP/argo-ios" \
+            -czf "$RUNNER_TEMP/argo-ios/packages/Argo-iphoneos-unsigned.xcarchive.tar.gz" \
+            Argo-iphoneos-unsigned.xcarchive
+          mkdir -p "$RUNNER_TEMP/argo-ios/ipa/Payload"
+          ditto "$RUNNER_TEMP/argo-ios/Argo-iphoneos-unsigned.xcarchive/Products/Applications/Argo.app" \
+            "$RUNNER_TEMP/argo-ios/ipa/Payload/Argo.app"
+          ditto -c -k --keepParent "$RUNNER_TEMP/argo-ios/ipa/Payload" \
+            "$RUNNER_TEMP/argo-ios/packages/Argo-unsigned.ipa"
+          cat > "$RUNNER_TEMP/argo-ios/packages/UNSIGNED.txt" <<'TEXT'
+          Argo-unsigned.ipa and the archive are unsigned iPhoneOS builds.
+          This IPA cannot be installed directly. Sign it with a suitable
+          certificate and provisioning profile before device installation.
+          TEXT
+          shasum -a 256 "$RUNNER_TEMP/argo-ios/packages/"*.tar.gz \
+            "$RUNNER_TEMP/argo-ios/packages/"*.ipa \
+            > "$RUNNER_TEMP/argo-ios/logs/packages.sha256"
+
+      - name: Preserve any xcresult bundle
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -d "$RUNNER_TEMP/argo-ios/results/Argo-archive.xcresult" ]; then
+            tar -C "$RUNNER_TEMP/argo-ios/results" \
+              -czf "$RUNNER_TEMP/argo-ios/packages/Argo-archive.xcresult.tar.gz" \
+              Argo-archive.xcresult
+          else
+            printf '%s\n' 'No xcresult bundle was produced.'
+          fi
+
+      - name: Upload existing outputs and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Argo-iOS-unsigned-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/argo-ios/packages/*
+            ${{ runner.temp }}/argo-ios/logs/*
+          if-no-files-found: warn
+          retention-days: 3
+          compression-level: 0

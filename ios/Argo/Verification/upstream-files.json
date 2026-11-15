@@ -1,0 +1,1022 @@
+{
+  "upstream": "https://github.com/nwverse/persona",
+  "revision": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+  "files": [
+    {
+      "path": "ios/Argo/Design/Theme.swift",
+      "sources": [
+        {
+          "path": "apple/Shared/Design/Theme.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "6de7dde5ccdcccd1894cb0f1bcedac164a027ead"
+        },
+        {
+          "path": "apple/Shared/Design/Styles/Glass.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "3664c89801ace74704a2f3b49c8028ad4162328f"
+        }
+      ],
+      "adaptation": "保留 Liquid Glass 字号、行高、间距、圆角、角色色及 Shell 表面；固定原版蓝色主题，品牌用 Argo。"
+    },
+    {
+      "path": "ios/Argo/Design/Palette.swift",
+      "sources": [
+        {
+          "path": "apple/Shared/Design/Palette.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "a613af6be0d2c6161a56f9f6229fa87dc67e68e7"
+        }
+      ],
+      "adaptation": "保留系统色；Persona coral 未用于品牌。"
+    },
+    {
+      "path": "ios/Argo/Design/StatusPalette.swift",
+      "sources": [
+        {
+          "path": "apple/Shared/StatusPalette.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "2cc188140e94e5a71c8ca0adb56a99b193699efc"
+        }
+      ],
+      "adaptation": "保留 dot/text/tint 状态色及明暗色 helper。"
+    },
+    {
+      "path": "ios/Argo/Design/Icons.swift",
+      "sources": [
+        {
+          "path": "apple/Shared/Design/Icons.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "652bc6ad03dc64c98f91e19e00bca4db013740cc"
+        }
+      ],
+      "adaptation": "保留实际使用的 SF Symbols，含 Persona 原版 interrupt=stop.fill；移除 Persona 品牌与无关平台图标。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/AgentMark.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/AgentMark.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "7f58bc6729f3e2cea2f89fc9e70ef5834fe37efb"
+        }
+      ],
+      "adaptation": "保留字母方块和 CLI 角标；名称取自 Argo 卡片。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/BesideOrUnder.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/BesideOrUnder.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "801839b5dcc0fe841ac1397c69d3d82437400321"
+        }
+      ],
+      "adaptation": "原始 Layout 算法；长标题、大字体的时间自动换行。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/CapsuleFilterBar.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/CapsuleFilterBar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "947c35fc200bdceb8f44a2747d8b9f81b09080e1"
+        }
+      ],
+      "adaptation": "保留滚动胶囊、状态色、数量及固定末端按钮；清理旧定位式翻译 key。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/Components.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/Components.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "f664aeb7a70690038e49960663865d03f3b8581e"
+        },
+        {
+          "path": "apple/Persona/Views/Chats/ChatsView.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e93c1e3163567c773c25600c80237f9de8a4a7e5"
+        }
+      ],
+      "adaptation": "提取 StatusDot、Working 环、Chip、TimeBesideOrUnder；以系统动效替换 Persona 可见性动画桥。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/ComposerButtons.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/ComposerButtons.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "8eee80dc2d5cd6a15ec954c3012882fce8a89485"
+        }
+      ],
+      "adaptation": "保留原版 ink 圆形按钮、44pt 命中区域与按压曲线；停止当前轮次使用同款 stop.fill 与 busy spinner，不引入音频能力。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/Notice.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/Notice.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "76260d17d4ead8ad125958bffd610a77c07d336d"
+        }
+      ],
+      "adaptation": "保留提示布局及 tone，固定原生 thinMaterial 表面。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/ReadingSize.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/ReadingSize.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "35c08b01778c562302ea715081e39331583ad787"
+        }
+      ],
+      "adaptation": "保留界面字体上限与正文独立 Dynamic Type。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/TextSize.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/TextSize.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "ece5b30f7cd98bfb09cc209d6f91b70877f6948c"
+        }
+      ],
+      "adaptation": "保留 scaledFrame、命中区域及行距；以 ScaledMetric 适配 iOS。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/ThemedIcon.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/ThemedIcon.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "cd5d0c53929f98122742fe9b871a0319bb5046ff"
+        }
+      ],
+      "adaptation": "保留 SF Symbol 入口，固定 Liquid Glass 原生字重。"
+    },
+    {
+      "path": "ios/Argo/DesignSystem/TypedText.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/TypedText.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e8880a7f3aca19ea03c1b8691af3e3b46bf2e47a"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/TextViewScroll.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "95d08bc8ac845885e045796081050a3c1eb06d16"
+        }
+      ],
+      "adaptation": "保留发送前 unmarkText 及 UITextInput 全文同步；仅读取有焦点的目标框，selector 用 Argo 前缀。"
+    },
+    {
+      "path": "ios/Argo/Views/RootView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/SplitNavigation.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "8afbbc12fff44892b6c583f819c3255b847fc044"
+        },
+        {
+          "path": "apple/Persona/Views/Chats/ChatsView.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e93c1e3163567c773c25600c80237f9de8a4a7e5"
+        }
+      ],
+      "adaptation": "保留 iPad 分栏及 340/400/480 列宽；仅保留 Argo Agent 路由。"
+    },
+    {
+      "path": "ios/Argo/Views/Shell/DrawerLayout.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Assistant/AssistantSidebar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "aa2a7d9982fe0ee76e9318b19b47d550039c5613"
+        }
+      ],
+      "adaptation": "保留固定侧栏、整页平移、0.82/380pt 侧栏宽、55pt 页角和 0.32s spring；单页 SwiftUI 状态替代 Hub/pager/UIKit 监测，打开手势限定列表左缘。"
+    },
+    {
+      "path": "ios/Argo/Views/Connection/HostWorkspaceView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Shell/UnifiedSidebar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1b4ee81a8b3086105b7860aa75f91a97475db3ea"
+        }
+      ],
+      "adaptation": "沿用侧栏层级及近白/近黑底色，内容接入真实主机、项目、工作区。"
+    },
+    {
+      "path": "ios/Argo/Views/Chats/AgentRowStyles.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chats/AgentRowStyles.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "665853624c98ee15a8ff04072dac9c8e165d0902"
+        }
+      ],
+      "adaptation": "移植默认 avatarRow、头像状态角标、标题/时间自适应、两行预览与状态元信息；改用 AgentSession 薄投影。"
+    },
+    {
+      "path": "ios/Argo/Views/Chats/ChatsView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chats/ChatsView.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e93c1e3163567c773c25600c80237f9de8a4a7e5"
+        }
+      ],
+      "adaptation": "保留列表、搜索、筛选胶囊与 split 选择，接入 Argo 卡片及真实排队数量。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/ChatView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/ChatView.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "10cb94ec74daea1afec3942cc5f8cf740bc7717b"
+        }
+      ],
+      "adaptation": "沿用 Persona 原生会话页面与工具栏中 active/canInterrupt 条件入口；映射为 Argo managed working 身份、当前主机连接和 busy/未知结果约束；停止结果单独提示并刷新实际状态与队列。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/ModelRecoveryCard.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/APIErrorCard.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "5c349efee2992f977d05b3eec87fdd673218d3ed"
+        },
+        {
+          "path": "apple/Persona/Views/Chat/AssistantModelSheet.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e26357f15b47e1bdd53d746462ce5ff145322698"
+        }
+      ],
+      "adaptation": "保留错误卡的警示、表面与可读详情及手输模型行；仅接入 managed Claude 模型错误的换模型并续跑契约，不移植 PersonaHub 模型目录。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/MessageViews.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/MessageViews.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1cb9c7346299f7e77af0547a968a09acfc0f97ed"
+        }
+      ],
+      "adaptation": "移植右侧蓝色消息泡、开放正文列、思考折叠及待发送形态；原生消息与发送回执分开，任意类型统一显示截断提示。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/PromptComposer.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/PromptComposer.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "765531484fb6377474fd7a2101996de2fb186496"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "4a15714c28f361c67cbc7b4efec815aa1fe4523d"
+        }
+      ],
+      "adaptation": "保留单一 TextField 与三子视图布局；恢复 Persona 空草稿时以 stop 圆形键替代 send 的行为，停止期间展示 busy，不清空草稿。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/ComposerParts.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/ComposerParts.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "9b20cb30afdf99b68c0b39f163db390d6696a224"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "4a15714c28f361c67cbc7b4efec815aa1fe4523d"
+        }
+      ],
+      "adaptation": "保留原 ComposerBoxLayout 三视图测量算法及 ComposerSurface，不创建第二个编辑器。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/ReplyBlocks.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/ReplyBlocks.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1b6dc95e6e04acabf789c1afaea677ce86e10a03"
+        }
+      ],
+      "adaptation": "移植代码标题、复制、横滚及色板；Foundation Markdown 替代 MarkdownUI/PersonaKit。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/ToolViews.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/ToolViews.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1c1da3730e08dcd33534b116b29050c705b1269a"
+        }
+      ],
+      "adaptation": "实际使用 BeautifulUI ToolChipRow；工具输入/输出/diff、计划、任务和步骤均读 Argo 核心模型。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/LICENSE",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/LICENSE",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "424b798f648076e6639ae057de98c98d55a57a3d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/LICENSE-beautifului",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/LICENSE-beautifului",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "6635631aded86516cec8cab103c1a6f27b026c42"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/NOTICE",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/NOTICE",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1ecef9aa93012ed02e9bdb21a73cebb30e20b4a1"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Package.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Package.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "74287f6dc18b7cd67ebd41ae9c0d4d4d1633d50c"
+        }
+      ],
+      "unchanged": false,
+      "patch": "remove-unvendored-test-target",
+      "adaptation": "前任已有改动：仅删除没有随包拷入的 BeautifulUITests target；本轮保留。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/AgentScreen.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/AgentScreen.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "87a2e9efe8eba562b89952969cf9e6f9a281d85c"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ApprovalCard.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ApprovalCard.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "aaeb017e114e349cc97a8ce1e9a634c0905f9c2a"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ChatPanel.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ChatPanel.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "59927e484064cf31c3c9bafafda1340403abb636"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/CodeBlock.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/CodeBlock.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "7f2faa2397116f43a8b85b55f07a02596366a4b4"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ContextCards.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ContextCards.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "856a80e70aa7558274e4592e86c262938b6b0655"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/DeliberateTap.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/DeliberateTap.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "8f5580762cc84c5806ee9116a57a927ec8f3ae36"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/DiffTable.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/DiffTable.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "371803f7fe7eba0bec1f16bffb482854eabaae59"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/FilterChips.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/FilterChips.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "5399ebb659a696ccb587e24440b999e87a28e53a"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/FilterTable.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/FilterTable.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "d3b05d6a40308fa7b183e8e76b39097e84a03f21"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/FineTuneCard.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/FineTuneCard.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "432d21af0f1d5eae290fe8f9b5ad5880c2a39d2b"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/Flowchart.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/Flowchart.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1ddc102b4c57f0f0475e0eed967011d92ff1d9d9"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/InsightCards.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/InsightCards.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "013c0705df1499accc8a6886f80e9ab056c7aec9"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ListRows.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ListRows.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "b9995f2eb4ca2855b39d821ac000f0f89b706a4c"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/LoadingState.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/LoadingState.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e70a2f57a713d726e6ed3ec00b23d9d2236c1109"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/PromptBar.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/PromptBar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "648abb1c6b3b80665d2a9137b1632dfbb21a29e8"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/RecommendationCard.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/RecommendationCard.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "48e13257af0bf36bb9fae978d8488ca6c102500f"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/RecordsTable.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/RecordsTable.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "f882666623be0ff6c46fb79fc0af8e120bee367d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/SearchList.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/SearchList.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "796f67d2760fab7a4fc40c29f65701c0ceaedbba"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/SelectionActions.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/SelectionActions.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "5a3b7302e4dc79add8172dbfad2034d5c2b0e10a"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/SidebarNav.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/SidebarNav.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "18e97a4b82307fdd2c15326b16147c6d720f4db8"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/SidebarPieces.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/SidebarPieces.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "2453f7118a89a0b123495460303b2434a70db69d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/StreamingText.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/StreamingText.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "9ead36b3739446b984f69aa56a5bd370831d0307"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/TaskRows.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/TaskRows.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e5b9bd20365b472ecd941cba85778c5738fc27e4"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ThinkingState.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ThinkingState.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "a92aa12eadb41c027efde1ac56ce772ee30cf79c"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ToolChipGroup.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ToolChipGroup.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1311a68e5b179cb1879cfdbb786346e9d70a3cea"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Components/ToolChips.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Components/ToolChips.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "5fc4f3cfec88860949ae7671fb454387137d08b4"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/Avatar.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/Avatar.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "2c3a84dedf80331e98aa2d85ca760f5d6990819a"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/Buttons.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/Buttons.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e05523651c0c3173bf64287f309fd8e675adf626"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/FlowLayout.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/FlowLayout.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "a6295d5b178375385f6d460f8c42161bcf976985"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/Glyphs.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/Glyphs.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "9af9a0c2d79f6408050ae2b70fa6dffc3554bf3d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/InlineSpans.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/InlineSpans.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "a2e9dae6d215a490f2b85cbe9cdae7e0f95bcee5"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/ProportionalColumns.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/ProportionalColumns.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "bceb67b52ffe1cf71e35b42d2ac8b48602178407"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/Reveal.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/Reveal.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "3dad724321092b77fefc2da42a5133c8d8321ad9"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/SVGPath.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/SVGPath.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "447f067e1752c8389939ec221b4b98ceda722903"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/Shimmer.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/Shimmer.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "5baf9ef907364a3ce5bead58772d8162560cb478"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Support/SpinningArc.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Support/SpinningArc.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "aa1fddaab7c73cb7cbcbd650f9dde7ac7aca7f7e"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Tokens/BUIColors.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Tokens/BUIColors.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "3566acee0597344ab7d82fd0ac3473122f1cdb84"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Tokens/BUIElevation.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Tokens/BUIElevation.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "3160f3f37eea145697c53c06ed03066e1e7dd81a"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Tokens/BUILayout.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Tokens/BUILayout.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e666d91289b4ea96f4d7b685cae7dd27c9ec639e"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Tokens/BUIMotion.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Tokens/BUIMotion.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "8cbf1ef7196a3fc9da3879a45d5cc84dcbd572be"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Tokens/BUITheme.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Tokens/BUITheme.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "a3a8e07088b7485908f05796fdb86f02066f2ade"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/Sources/BeautifulUI/Tokens/BUITypography.swift",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/Sources/BeautifulUI/Tokens/BUITypography.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "291ec19027ad41e0f19a69a577e3ea615d71f8f6"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/BeautifulUI/VENDORED.md",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/VENDORED.md",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "0ebb8e07edfb6d052df3948f9d6f95c2c84a3c78"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原样保留的 BeautifulUI 文件。"
+    },
+    {
+      "path": "ios/ThirdParty/Persona/LICENSE",
+      "sources": [
+        {
+          "path": "LICENSE",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "c8265a71fae6d6ec59b9a296b2dd2d990779212d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "原版 MIT 许可，原样保留。"
+    },
+    {
+      "path": "ios/Argo/Views/NewChat/NewChatView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/NewChat/NewChatView.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "2e9c5b1b998db8e96d548063a123819c0e7eee0f"
+        }
+      ],
+      "adaptation": "保留 NavigationStack/Form、主机卡片、推入选择、权限与首条消息、底部 Start 和相邻错误。改接 Argo profiles/create 与精确 context 回查，不移接 PersonaHub API、模型目录或首消息送达状态。"
+    },
+    {
+      "path": "ios/Argo/Resources/Licenses/Persona-LICENSE.txt",
+      "sources": [
+        {
+          "path": "LICENSE",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "c8265a71fae6d6ec59b9a296b2dd2d990779212d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "从现有 vendor 许可/通知逐字节复制为 App 可查看的资源；不改写正文。"
+    },
+    {
+      "path": "ios/Argo/Resources/Licenses/BeautifulUI-LICENSE.txt",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/LICENSE",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "424b798f648076e6639ae057de98c98d55a57a3d"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "从现有 vendor 许可/通知逐字节复制为 App 可查看的资源；不改写正文。"
+    },
+    {
+      "path": "ios/Argo/Resources/Licenses/BeautifulUI-LICENSE-beautifului.txt",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/LICENSE-beautifului",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "6635631aded86516cec8cab103c1a6f27b026c42"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "从现有 vendor 许可/通知逐字节复制为 App 可查看的资源；不改写正文。"
+    },
+    {
+      "path": "ios/Argo/Resources/Licenses/BeautifulUI-NOTICE.txt",
+      "sources": [
+        {
+          "path": "apple/Packages/BeautifulUI/NOTICE",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "1ecef9aa93012ed02e9bdb21a73cebb30e20b4a1"
+        }
+      ],
+      "unchanged": true,
+      "adaptation": "从现有 vendor 许可/通知逐字节复制为 App 可查看的资源；不改写正文。"
+    },
+    {
+      "path": "ios/Argo/Views/Settings/SettingsView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Settings/SettingsView.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "893610c2e96e60848c513c359eab0bc5d93212d5"
+        }
+      ],
+      "adaptation": "保留 Persona 系统样式 SettingsRow 的 Label/LabeledContent 行、设备与连接分组；仅提供本地 AppStorage 明暗外观、现有主机/工作区入口、应用版本与原文许可。移除 Persona Hub、助手、通知、语音、模型及自定义语言流程。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/AttachSheet.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/AttachSheet.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "151f11fffa51fe03699ad0bc0da74c912e5f716e"
+        }
+      ],
+      "adaptation": "保留 half/full sheet、Recents 三列网格、Photos/Files 胶囊、caption/Send 和关闭后动作；移除相机/视频/More/编辑器，接原会话真实 staging。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/TurnAttachments.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/TurnAttachments.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "e2933e144d44680c7c14e7df958dbc7135944bbf"
+        },
+        {
+          "path": "apple/Persona/Views/Chat/FileAttach.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "19ba6c37b6867c4703179cf67d9cf3aca21844d6"
+        }
+      ],
+      "adaptation": "保留文件行/文档卡和本机照片缩略条；明确 text-reference 与本机副本，接受管查看器；不构造 native image。"
+    },
+    {
+      "path": "ios/Argo/Attachments/AttachmentSources.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/FileAttach.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "19ba6c37b6867c4703179cf67d9cf3aca21844d6"
+        },
+        {
+          "path": "apple/Persona/Views/Chat/PhotoAttach.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "14258e81d0038940fcbb8ef970ee942a7a245ed0"
+        },
+        {
+          "path": "apple/Persona/Views/Chat/AttachSheet.swift",
+          "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
+          "blob": "151f11fffa51fe03699ad0bc0da74c912e5f716e"
+        }
+      ],
+      "adaptation": "复用 scoped/coordinated 私有 staging、1600/JPEG0.75 与 full/limited/denied；使用有界文件和可取消、只完成一次的 Photos 请求。"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+name: Argo
+configs:
+  Debug: debug
+  Release: release
+options:
+  createIntermediateGroups: true
+packages:
+  ArgoMobileKit:
+    path: Packages/ArgoMobileKit
+  BeautifulUI:
+    path: ThirdParty/BeautifulUI
+targets:
+  Argo:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Argo
+        excludes:
+          - Verification
+    dependencies:
+      - package: ArgoMobileKit
+        product: ArgoMobileKit
+      - package: BeautifulUI
+        product: BeautifulUI
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Argo
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Argo shows recent photos you allow so you can choose images to send to your paired development computer."
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Argo connects to paired development computers on your local network to read workspaces, Agent progress, and messages."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        MARKETING_VERSION: 0.1.0
+        PRODUCT_BUNDLE_IDENTIFIER: dev.argo.ios
+        PRODUCT_NAME: Argo
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+schemes:
+  Argo:
+    build:
+      targets:
+        Argo: all
+    run:
+      config: Debug
+    archive:
+      config: Release

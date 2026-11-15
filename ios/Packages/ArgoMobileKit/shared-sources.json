@@ -1,0 +1,95 @@
+{
+  "note": "Argo shared Foundation sources materialized into this repository; no external source checkout required.",
+  "files": [
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/GatewayProtocol.swift",
+      "argo_source": "mac/Sources/LoomKit/GatewayProtocol.swift",
+      "sha256": "0af305f34e9f88a9ed6052951cdf7b2eac7bfb98601db6846120df184a584b46"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/DisconnectTracker.swift",
+      "argo_source": "mac/Sources/LoomKit/DisconnectTracker.swift",
+      "sha256": "477ef4ff7ba088dfe33eced5b3096abc248683637d818dd7135352e50daa7f53"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/CacheSoon.swift",
+      "argo_source": "mac/Sources/LoomKit/CacheSoon.swift",
+      "sha256": "d4cb141bad0f85e4ebccffac673ddb5665e26ee8f16536f419822710fc84c795"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/PairingCode.swift",
+      "argo_source": "mac/Sources/LoomKit/PairingCode.swift",
+      "sha256": "07fc89c2075cca6bb89e6ef2d025124b1dcc68df84b8f3c8f6d6c0312636689a"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/Host.swift",
+      "argo_source": "mac/Sources/LoomKit/Host.swift",
+      "sha256": "d8fa7cdb99dd2a4cbd9c99abcf23e93a9cdb0cd7987eeb6b37873b1997703a4a"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/GatewayConnection.swift",
+      "argo_source": "mac/Sources/LoomKit/GatewayConnection.swift",
+      "sha256": "c1c01c2d4628da30bc5f1d27848e93dc27577fa1ae465597ab09b744b461b513"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/AgentNameTags.swift",
+      "argo_source": "mac/Sources/LoomKit/AgentNameTags.swift",
+      "sha256": "abc67d154f906bf152c9855dbfb6efa3834102241fd6a1de9e1cdcd0a2aaa502"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/TailcatCode.swift",
+      "argo_source": "mac/Sources/LoomKit/TailcatCode.swift",
+      "sha256": "af4339010200c52e86cfa7ec1f5293b8f3878c1c9562602cac7815a3048f7989"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/GatewayHandshake.swift",
+      "argo_source": "mac/Sources/LoomKit/GatewayHandshake.swift",
+      "sha256": "2b84546044149b735887617389a530b5c665bbdc1391fa3cff17e0a90a485ee1"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/LoomdAPI.swift",
+      "argo_source": "mac/Sources/LoomKit/LoomdAPI.swift",
+      "sha256": "09762ae42fc71bb9ed3322d8ceb1923dccfc502b66bdb5faec9cb97152a51da2"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/Keychain.swift",
+      "argo_source": "mac/Sources/LoomKit/Keychain.swift",
+      "sha256": "aa9f4022c31663d4830610a48b7f3fd3f792f92fdea899af6f58060be5a15457"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/HostLaunch.swift",
+      "argo_source": "mac/Sources/LoomKit/HostLaunch.swift",
+      "sha256": "d8d80db56586350bfc1e4aa6e7179517a3e7399aba0240b684dc13d9f89048bf"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/RemoteHint.swift",
+      "argo_source": "mac/Sources/LoomKit/RemoteHint.swift",
+      "sha256": "d19ae7378c6565cf0e052c4936be669f75d3478ec87856786d41d5b9b4b91755"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/AgentNotifications.swift",
+      "argo_source": "mac/Sources/LoomKit/AgentNotifications.swift",
+      "sha256": "32b87b925f17e1f6fbafd1f6782efe3ae533565172fde85d7929e4015354c46c"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/Attention.swift",
+      "argo_source": "mac/Sources/LoomKit/Attention.swift",
+      "sha256": "89ef34b0bf12abd8ad881017eb44e7fd4eb0558e470c3ad77b8b555f40ecca1a"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/Flag.swift",
+      "argo_source": "mac/Sources/LoomKit/Flag.swift",
+      "sha256": "7103dff1b62267acb870c488193eb89015520bb20a7bede597aa63a53b0fac65"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/PtydUpgradeNotice.swift",
+      "argo_source": "mac/Sources/LoomKit/PtydUpgradeNotice.swift",
+      "sha256": "b97f385a82cd9c069bbd04d910bdc07cb32ad6d0fe519323708d764bb85161f6"
+    },
+    {
+      "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/PairingReachability.swift",
+      "argo_source": "mac/Sources/LoomKit/PairingReachability.swift",
+      "sha256": "78db0d22ac237a0ff4701efad48c7c34af9b6942e411d170ede6f95088a8f229"
+    }
+  ]
+}

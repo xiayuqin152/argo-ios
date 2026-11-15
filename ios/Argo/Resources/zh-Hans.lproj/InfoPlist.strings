@@ -1,0 +1,4 @@
+/* Local network permission shown by iOS. */
+"NSLocalNetworkUsageDescription" = "Argo 连接已配对的局域网开发机，用于读取工作区、Agent 进展和消息。";
+
+"NSPhotoLibraryUsageDescription" = "Argo 会显示你允许访问的最近照片，供你选择并发送到已配对的开发电脑。";
