@@ -68,7 +68,7 @@ struct AttachmentViewer: View {
                     try Task.checkCancellation()
                     guard let thumbnail else { throw CocoaError(.fileReadCorruptFile) }
                     image = thumbnail.image
-                } else if !QLPreviewController.canPreviewItem(loaded.url as NSURL) {
+                } else if !QLPreviewController.canPreview(loaded.url as NSURL) {
                     throw ArgoClientError.refusedLocally(.message("This file type cannot be previewed on this device."))
                 }
                 file = loaded
