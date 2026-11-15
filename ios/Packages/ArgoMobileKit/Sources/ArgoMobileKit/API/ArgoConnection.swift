@@ -142,6 +142,12 @@ public actor ArgoConnection {
     /// The terminal list owns current chat destinations; `/agents` also contains
     /// released-shell history, which cannot reopen that run via current `/chat`.
     public func agents(workspace: String) async throws -> [ArgoAgentCard] {
+        try await agentSnapshot(workspace: workspace).cards
+    }
+
+    /// Cards and the current terminal observations used to filter them. The two
+    /// GETs are independent; an absent row is not evidence that a terminal ended.
+    public func agentSnapshot(workspace: String) async throws -> (cards: [ArgoAgentCard], terminals: [ArgoTerminalView]) {
         guard !workspace.isEmpty else { throw ArgoClientError.refusedLocally(.message("Choose a workspace first.")) }
         let query = Self.query(["ws": workspace])
         async let managed: [ArgoAgentCard]? = get("/api/agents" + query)
@@ -156,7 +162,7 @@ public actor ArgoConnection {
         // Never suppress the current manual CLI because of an old managed card.
         let cards = (list ?? []).filter { $0.ws == workspace && currentRuns[$0.terminal] == $0.run }
         let manual = currentTerminals.compactMap(ArgoAgentCard.init(manual:))
-        return cards + manual
+        return (cards + manual, currentTerminals)
     }
 
     /// One run's progress: plan, team tasks, recent steps, pending asks.
@@ -204,6 +210,37 @@ public actor ArgoConnection {
     }
 
     // MARK: Read markers
+
+    /// Self-registration is explicit and idempotent. It never changes or
+    /// replays the conversation's POST/reply/interrupt delivery behavior.
+    public func registerNotifications(token: String, environment: String, topic: String,
+                                      credential: GatewayCredential) async throws -> ArgoPushRegistration {
+        let body = try JSONSerialization.data(withJSONObject: ["token": token, "environment": environment,
+            "topic": topic, "hostID": host.id.uuidString])
+        let response = try await perform(HTTPRequest(method: "PUT", target: "/api/notify/device",
+            headers: Self.pushHeaders(credential), body: body), authRetry: false)
+        let receipt: ArgoPushRegistration = try decode(response)
+        guard receipt.enabled, receipt.hostID == host.id, receipt.deviceID == credential.device,
+              GatewayCredential.validDevice(receipt.registrationID) else {
+            throw ArgoClientError.invalidResponse(.message("The notification registration receipt is invalid."))
+        }
+        return receipt
+    }
+
+    public func unregisterNotifications(credential: GatewayCredential) async throws {
+        let response = try await perform(HTTPRequest(method: "DELETE", target: "/api/notify/device",
+            headers: Self.pushHeaders(credential)), authRetry: false)
+        struct Receipt: Decodable { let enabled: Bool }
+        let receipt: Receipt = try decode(response)
+        guard !receipt.enabled else {
+            throw ArgoClientError.invalidResponse(.message("The host did not unregister notifications."))
+        }
+    }
+
+    private static func pushHeaders(_ credential: GatewayCredential) -> [(String, String)] {
+        [("Content-Type", "application/json"), ("X-Argo-Device-ID", credential.device),
+         ("X-Argo-Device-Token", credential.token)]
+    }
 
     /// Marks the managed run viewed, acknowledging only the question identities
     /// in the snapshot the user opened. Repeating the same exact marker is safe.

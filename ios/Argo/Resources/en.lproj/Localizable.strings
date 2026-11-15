@@ -53,7 +53,6 @@
 "Version" = "Version";
 "Reconnect and Refresh" = "Reconnect and Refresh";
 "Connect your computer" = "Connect your computer";
-"Run argo pair on your computer, then paste the pairing code here." = "Run argo pair on your computer, then paste the pairing code here.";
 "Pairing Code" = "Pairing Code";
 "Paste Pairing Code" = "Paste Pairing Code";
 "The code is used once. Device credentials are stored in this device's Keychain." = "The code is used once. Device credentials are stored in this device's Keychain.";
@@ -137,6 +136,8 @@
 "Review the current card and conversation before starting another model change." = "Review the current card and conversation before starting another model change.";
 "Enter a model ID using only letters, digits and . : / @ [ ] - _, up to 80 characters." = "Enter a model ID using only letters, digits and . : / @ [ ] - _, up to 80 characters.";
 "The host returned no resume receipt." = "The host returned no resume receipt.";
+"The native conversation is unavailable or does not match this Agent. Refresh again before starting another model change." = "The native conversation is unavailable or does not match this Agent. Refresh again before starting another model change.";
+"The native conversation changed. Refresh again with the same native identity before starting another model change." = "The native conversation changed. Refresh again with the same native identity before starting another model change.";
 
 /* Client errors. Server response bodies remain verbatim. */
 "The connection is closed." = "The connection is closed.";
@@ -330,3 +331,42 @@
 "Copy Path" = "Copy Path";
 "Close" = "Close";
 "Text preview limited to 256 KiB." = "Text preview limited to 256 KiB.";
+"This file link has no verified source in this message." = "This file link has no verified source in this message.";
+
+/* QR and manual host pairing. */
+"Run argo pair on your computer, then scan or paste the pairing code." = "Run argo pair on your computer, then scan or paste the pairing code.";
+"Pairing code scanner" = "Pairing code scanner";
+"Checking camera access" = "Checking camera access";
+"Camera access is off. Paste a pairing code or enter it manually." = "Camera access is off. Paste a pairing code or enter it manually.";
+"QR scanning is unavailable on this device. Paste a pairing code or enter it manually." = "QR scanning is unavailable on this device. Paste a pairing code or enter it manually.";
+"Scan Pairing Code" = "Scan Pairing Code";
+"Scan the QR code printed by argo pair. The code is valid once and expires after 10 minutes." = "Scan the QR code printed by argo pair. The code is valid once and expires after 10 minutes.";
+"Enter Manually" = "Enter Manually";
+"Enter the complete argo1: code, including the address, certificate fingerprint and one-time secret." = "Enter the complete argo1: code, including the address, certificate fingerprint and one-time secret.";
+"Command line" = "Command line";
+"Expand the message box" = "Expand the message box";
+"Edit Message" = "Edit Message";
+"Finish Editing" = "Finish Editing";
+"Paste Image" = "Paste Image";
+"The pasted image could not be read." = "The pasted image could not be read.";
+
+/* Persona #8202: opt-in Return sends; IME composition stays in the field. */
+"Return Key Sends" = "Return Key Sends";
+"Send with Return; Shift-Return starts a new line" = "Send with Return; Shift-Return starts a new line";
+
+/* Argo phone notifications */
+"Notifications" = "Notifications";
+"Agent Alerts on This iPhone" = "Agent Alerts on This iPhone";
+"Alerts from the selected host contain status only. Tap an alert to open its Agent." = "Alerts from the selected host contain status only. Tap an alert to open its Agent.";
+"Retry Notifications" = "Retry Notifications";
+"Open iOS Settings" = "Open iOS Settings";
+"Pair a host to enable Agent alerts." = "Pair a host to enable Agent alerts.";
+"Couldn't Open Agent" = "Couldn't Open Agent";
+"Allow notifications in iOS Settings to receive Agent alerts." = "Allow notifications in iOS Settings to receive Agent alerts.";
+"Apple could not register this signed app for notifications. Retry when connected." = "Apple could not register this signed app for notifications. Retry when connected.";
+"The notification registration receipt is invalid." = "The notification registration receipt is invalid.";
+"The host did not unregister notifications." = "The host did not unregister notifications.";
+"Select the paired host and retry notification removal." = "Select the paired host and retry notification removal.";
+"The signed app needs an explicit APNs environment and bundle topic." = "The signed app needs an explicit APNs environment and bundle topic.";
+"This notification's workspace is no longer available." = "This notification's workspace is no longer available.";
+"This notification's Agent is no longer available." = "This notification's Agent is no longer available.";

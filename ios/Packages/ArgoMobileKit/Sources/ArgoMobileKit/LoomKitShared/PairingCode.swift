@@ -40,7 +40,7 @@ public struct PairingCode: Equatable, Sendable {
         let print = String(parts[parts.count - 2])
         let portText = String(parts[parts.count - 3])
         var host = parts[0..<(parts.count - 3)].joined(separator: ":")
-        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        host = Self.normalizedHost(host)
         guard Self.validHost(host) else {
             throw LoomError.message("配对码里的远程地址「\(host.prefix(80))」不合法")
         }
@@ -60,6 +60,40 @@ public struct PairingCode: Equatable, Sendable {
     }
 
     private static let malformed = LoomError.message("配对码格式不对，应为 argo1:<地址>:<端口>:<指纹>:<密钥>（旧版远程是 loom1:）。请完整复制 pair 命令打印的那一行。")
+
+    /// Pairing codes and saved hosts contain raw addresses, not URI hosts:
+    /// brackets delimit IPv6, and `%25en0` means the literal zone `25en0`.
+    /// Unicode DNS follows Go's pipeline: NFC, Unicode lowercase, then
+    /// UTS #46 non-transitional lookup via Foundation to standard A-labels.
+    /// ASCII names retain their spelling.
+    static func normalizedHost(_ host: String) -> String {
+        var host = host
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        if !host.contains(":"), host.unicodeScalars.contains(where: { !$0.isASCII }) {
+            host = host.precomposedStringWithCanonicalMapping.lowercased()
+            var components = URLComponents()
+            components.scheme = "http"
+            components.host = host
+            let prefix = "http://"
+            if let serialized = components.string, serialized.hasPrefix(prefix) {
+                host = String(serialized.dropFirst(prefix.count))
+            }
+        }
+        return host
+    }
+
+    /// DNS names and hexadecimal IP digits are case-insensitive, but an IPv6
+    /// zone is a case-sensitive interface name or index on the connecting device.
+    public static func sameHost(_ lhs: String, _ rhs: String) -> Bool {
+        let lhs = zoneSplit(normalizedHost(lhs))
+        let rhs = zoneSplit(normalizedHost(rhs))
+        return lhs.host.caseInsensitiveCompare(rhs.host) == .orderedSame && lhs.zone == rhs.zone
+    }
+
+    private static func zoneSplit(_ host: String) -> (host: String, zone: String?) {
+        guard let percent = host.firstIndex(of: "%") else { return (host, nil) }
+        return (String(host[..<percent]), String(host[host.index(after: percent)...]))
+    }
 
     /// A DNS name, an IPv4 address or an IPv6 address: only the characters
     /// those use, so the value is safe to show and to hand to Network.framework.

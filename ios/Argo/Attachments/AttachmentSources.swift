@@ -56,6 +56,15 @@ nonisolated enum PhotoAttach {
     static let maxSide = 1600
     static let jpegQuality = 0.75
 
+    /// Called only by the native PasteButton's payload action. Retain providers,
+    /// not image bytes; the existing preparation queue loads/encodes serially.
+    @MainActor static func inputs(providers: [NSItemProvider]) -> [AttachmentInput] {
+        providers.map { provider in
+            let source = PastedImageSource(provider)
+            return AttachmentInput(name: "Photo.jpg", kind: .photo) { try await source.stage() }
+        }
+    }
+
     @MainActor static func inputs(_ items: [PhotosPickerItem]) -> [AttachmentInput] {
         items.map { item in
             return AttachmentInput(name: "Photo.jpg", kind: .photo) {
@@ -106,6 +115,30 @@ nonisolated enum PhotoAttach {
             }
             CGImageDestinationAddImage(encoder, image, [kCGImageDestinationLossyCompressionQuality: jpegQuality] as CFDictionary)
             guard CGImageDestinationFinalize(encoder) else { throw CocoaError(.fileWriteUnknown) }
+        }
+    }
+}
+
+private nonisolated final class PastedImageSource: @unchecked Sendable {
+    private let provider: NSItemProvider
+    init(_ provider: NSItemProvider) { self.provider = provider }
+
+    func stage() async throws -> ArgoLocalAttachment {
+        try Task.checkCancellation()
+        let request = AttachmentSelectionRequest<ArgoLocalAttachment>()
+        return try await request.load { [self] done in
+            let progress = provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, error in
+                if let error { done(.failure(error)); return }
+                guard let url else {
+                    done(.failure(ArgoClientError.refusedLocally(.message("The pasted image could not be read."))))
+                    return
+                }
+                // The provider's temporary URL is valid only during this callback.
+                // Decode a <=1600px thumbnail and create the existing private file
+                // before returning; never retain provider URLs or full UIImage/Data.
+                done(Result { try PhotoAttach.encode(url: url) })
+            }
+            return { progress.cancel() }
         }
     }
 }

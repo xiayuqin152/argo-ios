@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct ArgoApp: App {
+    @UIApplicationDelegateAdaptor(ArgoAppDelegate.self) private var appDelegate
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system
 
     var body: some Scene {
@@ -44,6 +45,10 @@ private struct ArgoBootstrap: View {
             }) { host, credential in
                 try ArgoConnection(host: host, credential: credential)
             }
+            PhoneNotifications.shared.attach(store: store) { host, credential in
+                try ArgoConnection(host: host, credential: credential)
+            }
+            model?.unregisterNotifications = { id in try await PhoneNotifications.shared.forgetHost(id) }
             problem = nil
         } catch { problem = error.localizedDescription }
     }

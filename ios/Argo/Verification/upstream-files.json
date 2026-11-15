@@ -167,9 +167,14 @@
           "path": "apple/Persona/DesignSystem/TextViewScroll.swift",
           "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
           "blob": "95d08bc8ac845885e045796081050a3c1eb06d16"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "75c30cc008554144a72fb917edd548f528ea45b0",
+          "blob": "8311f503c935f723cad12f5743dbc3d2f0fb0147"
         }
       ],
-      "adaptation": "保留发送前 unmarkText 及 UITextInput 全文同步；仅读取有焦点的目标框，selector 用 Argo 前缀。"
+      "adaptation": "保留发送前 unmarkText 及 UITextInput 全文同步；仅读取有焦点的目标框，selector 用 Argo 前缀。; Optional ReturnSends #8202 (off by default), current IME and input/modal ownership preserved."
     },
     {
       "path": "ios/Argo/Views/RootView.swift",
@@ -240,7 +245,7 @@
           "blob": "10cb94ec74daea1afec3942cc5f8cf740bc7717b"
         }
       ],
-      "adaptation": "沿用 Persona 原生会话页面与工具栏中 active/canInterrupt 条件入口；映射为 Argo managed working 身份、当前主机连接和 busy/未知结果约束；停止结果单独提示并刷新实际状态与队列。"
+      "adaptation": "沿用 Persona 原生会话页面与工具栏中 active/canInterrupt 条件入口；映射为 Argo managed working 身份、当前主机连接和 busy/未知结果约束；停止结果单独提示并刷新实际状态与队列；正文链接按该条当前消息的服务端 fileRefs 授权，卡片/下载捕获原会话与消息快照。"
     },
     {
       "path": "ios/Argo/Views/Chat/ModelRecoveryCard.swift",
@@ -281,9 +286,19 @@
           "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
           "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
           "blob": "4a15714c28f361c67cbc7b4efec815aa1fe4523d"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "89927b54baab6b8207315f6c2a4d2e5831598d45",
+          "blob": "208f6b1e67e919f4273d630aaba16c769d8257b6"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "75c30cc008554144a72fb917edd548f528ea45b0",
+          "blob": "8311f503c935f723cad12f5743dbc3d2f0fb0147"
         }
       ],
-      "adaptation": "保留单一 TextField 与三子视图布局；恢复 Persona 空草稿时以 stop 圆形键替代 send 的行为，停止期间展示 busy，不清空草稿。"
+      "adaptation": "保留单一 TextField 与三子视图布局；恢复 Persona 空草稿时以 stop 圆形键替代 send 的行为，停止期间展示 busy，不清空草稿。; Full-page editing shares the same draft and holds seen coverage until actual onDismiss.; Optional ReturnSends #8202 (off by default), current IME and input/modal ownership preserved."
     },
     {
       "path": "ios/Argo/Views/Chat/ComposerParts.swift",
@@ -966,9 +981,14 @@
           "path": "apple/Persona/Views/Settings/SettingsView.swift",
           "commit": "3002eb387c65fe471a75b03586e89bd49e20f4a3",
           "blob": "893610c2e96e60848c513c359eab0bc5d93212d5"
+        },
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "75c30cc008554144a72fb917edd548f528ea45b0",
+          "blob": "8311f503c935f723cad12f5743dbc3d2f0fb0147"
         }
       ],
-      "adaptation": "保留 Persona 系统样式 SettingsRow 的 Label/LabeledContent 行、设备与连接分组；仅提供本地 AppStorage 明暗外观、现有主机/工作区入口、应用版本与原文许可。移除 Persona Hub、助手、通知、语音、模型及自定义语言流程。"
+      "adaptation": "保留 Persona 系统样式 SettingsRow 的 Label/LabeledContent 行、设备与连接分组；仅提供本地 AppStorage 明暗外观、现有主机/工作区入口、应用版本与原文许可。移除 Persona Hub、助手、通知、语音、模型及自定义语言流程。; Optional ReturnSends #8202 (off by default), current IME and input/modal ownership preserved."
     },
     {
       "path": "ios/Argo/Views/Chat/AttachSheet.swift",
@@ -1017,6 +1037,50 @@
         }
       ],
       "adaptation": "复用 scoped/coordinated 私有 staging、1600/JPEG0.75 与 full/limited/denied；使用有界文件和可取消、只完成一次的 Photos 请求。"
+    },
+    {
+      "path": "ios/Argo/Views/Connection/PairingView.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Settings/SettingsView.swift",
+          "commit": "89927b54baab6b8207315f6c2a4d2e5831598d45",
+          "blob": "5419dadd2abce874e03f44f3879efea238cf9dfa"
+        }
+      ],
+      "adaptation": "保留 PairView 的 Form、扫码区、手动入口和工具栏。仅接入 Argo 现有 AppModel/HostStore、PairingCode 及 TLS 指纹校验，不接入 Hub/密码/SSH，不扩展冻结 V3 尚未消费的 TailcatCode。; Argo QR round2 clears prior code on scan entry, gates actual Connect by visible/active/manual state, and covers the full page while inactive."
+    },
+    {
+      "path": "ios/Argo/Views/Connection/PairingScanner.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Settings/SettingsView.swift",
+          "commit": "89927b54baab6b8207315f6c2a4d2e5831598d45",
+          "blob": "5419dadd2abce874e03f44f3879efea238cf9dfa"
+        }
+      ],
+      "adaptation": "复用 QRScanner 的 VisionKit DataScannerViewController 和 QR 识别配置；补充单次投递、停止/取消、显式不可用回调。"
+    },
+    {
+      "path": "ios/Argo/Views/Chat/ComposerPageEditor.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/DesignSystem/ShellComposerBar.swift",
+          "commit": "89927b54baab6b8207315f6c2a4d2e5831598d45",
+          "blob": "208f6b1e67e919f4273d630aaba16c769d8257b6"
+        }
+      ],
+      "adaptation": "Full-page TextEditor/selection/IME handoff, adapted to the existing ConversationState draft, SeenPresentation and one-submit ownership."
+    },
+    {
+      "path": "ios/Argo/Views/Chat/PasteImageChip.swift",
+      "sources": [
+        {
+          "path": "apple/Persona/Views/Chat/PasteImageChip.swift",
+          "commit": "89927b54baab6b8207315f6c2a4d2e5831598d45",
+          "blob": "29f632a271eed42f13ec96e33774615984b4bbdb"
+        }
+      ],
+      "adaptation": "Native PasteButton action supplies providers only; image preparation uses existing bounded private files, with no clipboard polling."
     }
   ]
 }

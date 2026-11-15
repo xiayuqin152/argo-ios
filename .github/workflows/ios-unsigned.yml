@@ -39,6 +39,13 @@ jobs:
             xcrun --sdk iphoneos --show-sdk-version
           } 2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/toolchain.log"
 
+      - name: Run ArgoMobileKit core tests
+        run: |
+          set -euo pipefail
+          xcrun swift test --package-path ios/Packages/ArgoMobileKit \
+            --scratch-path "$RUNNER_TEMP/argo-ios/core-tests" --jobs 2 \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/core-tests.log"
+
       - name: Prepare XcodeGen 2.46.0
         run: |
           set -euo pipefail
@@ -72,6 +79,16 @@ jobs:
       - name: Package the unsigned archive and IPA
         run: |
           set -euo pipefail
+          python3 - "$RUNNER_TEMP/argo-ios/Argo-iphoneos-unsigned.xcarchive/Products/Applications/Argo.app/Info.plist" <<'PY' 2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/app-info-check.log"
+          import plistlib
+          import sys
+
+          with open(sys.argv[1], "rb") as source:
+              environment = plistlib.load(source).get("ArgoAPNSEnvironment")
+          if environment != "production":
+              raise SystemExit(f"Release App Info.plist: expected ArgoAPNSEnvironment='production', got {environment!r}")
+          print("OK: Release App ArgoAPNSEnvironment=production")
+          PY
           tar -C "$RUNNER_TEMP/argo-ios" \
             -czf "$RUNNER_TEMP/argo-ios/packages/Argo-iphoneos-unsigned.xcarchive.tar.gz" \
             Argo-iphoneos-unsigned.xcarchive

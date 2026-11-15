@@ -8,12 +8,15 @@ import UIKit
 
 @MainActor @Observable final class AttachPanel {
     enum Outcome { case closed, send, allPhotos, files }
-    var shown = false
+    let presentation = SeenPresentation()
     var picked: [String] = []
     var outcome: Outcome = .closed
     var identity: ArgoAgentIdentity?
 
-    func leave(_ outcome: Outcome) { self.outcome = outcome; shown = false }
+    func leave(_ outcome: Outcome) {
+        self.outcome = outcome
+        presentation.requestDismissal()
+    }
 }
 
 private enum AttachTab: String, CaseIterable, Identifiable {
