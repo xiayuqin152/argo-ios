@@ -38,7 +38,7 @@ struct ChatView: View {
                             Text("First message submitted with creation. Delivery has no separate receipt; check the Agent's native conversation.")
                                 .font(Theme.Font.caption).foregroundStyle(.secondary)
                             if let text = creation.text {
-                                Text(verbatim: text).font(Theme.Font.secondary).textSelection(.enabled)
+                                Text(verbatim: text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
                                 Button("Copy First Message") { UIPasteboard.general.string = text }
                             } else {
                                 Text("The original first message was kept only in memory and is unavailable after restarting the app.")
