@@ -416,3 +416,9 @@
 "The original terminal may have received this input. Review the original conversation before sending it again." = "原终端可能已接收此输入，再次发送前请检查原会话。";
 "Earlier Records Unavailable" = "续接前记录暂不可用";
 "Open the conversation to review earlier records." = "打开会话以检查续接前记录。";
+
+/* Explicit removal of an uncertain PTY record. */
+"Remove Unknown Delivery Record?" = "移除投递未知记录？";
+"Remove Record" = "移除记录";
+"This removes only the Argo record. It does not stop or retract input that may have reached the original terminal." = "此操作仅移除 Argo 记录，不会停止或撤回可能已送至原终端的输入。";
+"Removal was not confirmed. Refresh the records before trying again. Terminal input is unchanged." = "尚未确认记录已移除，请先刷新记录再决定是否重试。终端输入未改变。";

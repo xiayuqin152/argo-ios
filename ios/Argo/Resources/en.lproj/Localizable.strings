@@ -416,3 +416,9 @@
 "The original terminal may have received this input. Review the original conversation before sending it again." = "The original terminal may have received this input. Review the original conversation before sending it again.";
 "Earlier Records Unavailable" = "Earlier Records Unavailable";
 "Open the conversation to review earlier records." = "Open the conversation to review earlier records.";
+
+/* Explicit removal of an uncertain PTY record. */
+"Remove Unknown Delivery Record?" = "Remove Unknown Delivery Record?";
+"Remove Record" = "Remove Record";
+"This removes only the Argo record. It does not stop or retract input that may have reached the original terminal." = "This removes only the Argo record. It does not stop or retract input that may have reached the original terminal.";
+"Removal was not confirmed. Refresh the records before trying again. Terminal input is unchanged." = "Removal was not confirmed. Refresh the records before trying again. Terminal input is unchanged.";

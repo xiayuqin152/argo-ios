@@ -492,7 +492,7 @@ struct ChatView: View {
 private struct NativeHistoryView: View {
     @Bindable var read: NativeHistoryRead
     @Environment(AppModel.self) private var model
-    @State private var nativeToHide: ArgoQueuedMessage?
+    @State private var recordToRemove: ArgoQueuedMessage?
 
     var body: some View {
         NavigationStack {
@@ -543,11 +543,17 @@ private struct NativeHistoryView: View {
                                 Button("View Full Message") { model.openNativeHistoryItem(item, in: read) }.tapTargetHeight()
                             }
                             .font(Theme.Font.captionStrong).disabled(!model.status.isConnected)
-                            if item.native != nil {
-                                Button("Hide Record") { nativeToHide = item }
-                                    .font(Theme.Font.captionStrong).tapTargetHeight()
-                                    .disabled(!model.status.isConnected || read.hidingIDs.contains(item.id) || read.hideProblem != nil)
+                            Group {
+                                if item.native != nil {
+                                    Button("Hide Record") { recordToRemove = item }.tapTargetHeight()
+                                } else {
+                                    Button("Remove Record") { recordToRemove = item }.tapTargetHeight()
+                                }
                             }
+                            // Confirmation uses the original row; the model rechecks
+                            // its source owner and routes Native/ordinary separately.
+                            .font(Theme.Font.captionStrong)
+                            .disabled(!model.status.isConnected || read.hidingIDs.contains(item.id) || read.hideProblem != nil)
                         }
                         .padding(Theme.Space.m)
                         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
@@ -563,11 +569,20 @@ private struct NativeHistoryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.closeNativeHistory(read) } } }
         }
-        .confirmationDialog("Hide Handoff Record?", isPresented: Binding(get: { nativeToHide != nil }, set: { if !$0 { nativeToHide = nil } }),
-                            titleVisibility: .visible, presenting: nativeToHide) { item in
-            Button("Hide Record", role: .destructive) { model.hideNativeHistoryItem(item, in: read) }
-        } message: { _ in
-            Text("This only hides the Argo status record. It does not cancel or retract input already received by Codex.")
+        .confirmationDialog(L10n.text(recordToRemove?.native == nil ? "Remove Unknown Delivery Record?" : "Hide Handoff Record?"),
+                            isPresented: Binding(get: { recordToRemove != nil }, set: { if !$0 { recordToRemove = nil } }),
+                            titleVisibility: .visible, presenting: recordToRemove) { item in
+            if item.native != nil {
+                Button("Hide Record", role: .destructive) { model.hideNativeHistoryItem(item, in: read) }
+            } else {
+                Button("Remove Record", role: .destructive) { model.removeUnknownHistoryItem(item, in: read) }
+            }
+        } message: { item in
+            if item.native != nil {
+                Text("This only hides the Argo status record. It does not cancel or retract input already received by Codex.")
+            } else {
+                Text("This removes only the Argo record. It does not stop or retract input that may have reached the original terminal.")
+            }
         }
         .sheet(item: Binding(get: { read.queueItemRead }, set: { value in
             if value == nil, let full = read.queueItemRead { model.closeQueueItem(full) }

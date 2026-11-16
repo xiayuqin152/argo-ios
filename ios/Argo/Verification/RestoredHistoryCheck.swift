@@ -15,8 +15,13 @@ private enum Scenario: String, CaseIterable {
     case fullClose, fullSheetClose, fullHost, fullRun, fullReconnect, hideDuplicate, hideClose, hideUnknown, cleanup
     case warningZero, warningPartial, warningRecovery, warningCard
     case ordinaryUnknown, ordinaryFullRevision, ordinaryFullOwner, ordinaryFullClose, ordinaryRepair, ordinaryCleanup
+    case sourceFullIdentityDrift, ordinaryOldTarget
+    case ordinaryRemove, ordinaryRemoveUnknown, ordinaryRemoveClose, ordinaryRemoveRepair
+    case ordinaryRemoveWorkspace, ordinaryRemoveIdentity, ordinaryRemoveStillPresent
 
-    var ordinarySource: Bool { [.ordinaryUnknown, .ordinaryFullRevision, .ordinaryFullOwner, .ordinaryFullClose, .ordinaryRepair, .ordinaryCleanup].contains(self) }
+    var ordinaryRemoval: Bool { [.ordinaryRemove, .ordinaryRemoveUnknown, .ordinaryRemoveClose, .ordinaryRemoveRepair, .ordinaryRemoveWorkspace, .ordinaryRemoveIdentity, .ordinaryRemoveStillPresent].contains(self) }
+    var ordinarySource: Bool { ordinaryRemoval || [.ordinaryUnknown, .ordinaryFullRevision, .ordinaryFullOwner, .ordinaryFullClose, .ordinaryRepair, .ordinaryCleanup, .ordinaryOldTarget].contains(self) }
+    var sourceIdentityMoved: Bool { ordinaryRemoval || [.sourceIdentitySession, .sourceFullIdentityDrift, .ordinaryOldTarget].contains(self) }
     var sourceWarning: Bool { [.warningZero, .warningPartial, .warningRecovery].contains(self) }
 }
 
@@ -48,7 +53,7 @@ private actor Network {
     }
     private func sources() -> [[String: Any]] {
         if revoked { return [] }
-        if scenario.ordinarySource { return [["sourceRun": "r0", "target": identity("r0"), "nativeHistory": 1]] }
+        if scenario.ordinarySource { return hidden ? [] : [["sourceRun": "r0", "target": identity("r0"), "nativeHistory": 1]] }
         if scenario.sourceWarning && !warningCleared {
             if scenario != .warningPartial { return [] }
             return [["sourceRun": "r0", "target": identity("r0"), "nativeHistory": 3]]
@@ -100,12 +105,13 @@ private actor Network {
                 foreign["target"] = identity(run, session: "other-native")
                 foreign["id"] = "foreign"
                 value["items"] = [row(run), row(run, id: "pending", native: nil), row(run, id: "sent", native: nil), foreign]
+                if hidden { value["items"] = (value["items"] as! [[String: Any]]).filter { $0["id"] as? String != "same" } }
                 value["later"] = []
                 value["pending"] = 4
                 value["nativeHistory"] = 0
             } else {
                 value["items"] = [row(run, native: nil)]
-                value["nativeHistory"] = 1
+                value["nativeHistory"] = hidden ? 0 : 1
             }
         }
         if !source { value["identity"] = identity(run, session: ownerSession) }
@@ -120,7 +126,7 @@ private actor Network {
             if scenario == .wrongWorkspace { value["ws"] = "other-workspace" }
             if scenario == .wrongRun { value["run"] = "r-wrong" }
             if scenario == .wrongIdentity { value["identity"] = identity("r-wrong") }
-            if scenario == .sourceIdentitySession { value["identity"] = identity(run, session: "other-native") }
+            if scenario.sourceIdentityMoved { value["identity"] = identity(run, session: "source-current-session") }
         }
         return value
     }
@@ -147,10 +153,15 @@ private actor Network {
         }
         let response: HTTPResponse
         if request.method == "DELETE" {
-            try require(path == "/api/agents/r0/queue/same/native" && !reuse, "Hide used current run or ordinary endpoint")
-            writes.append((request.method, path)); hidden = true
-            if scenario == .hideUnknown { throw TransportFailure.noReply("synthetic lost hide ACK") }
-            response = try json(queue("r0"))
+            try require(path == (scenario.ordinarySource ? "/api/agents/r0/queue/same" : "/api/agents/r0/queue/same/native") &&
+                        !reuse && request.body == nil && url.queryItems == [URLQueryItem(name: "bounded", value: "1")], "Removal used wrong run/endpoint/body or write replay")
+            writes.append((request.method, path))
+            hidden = scenario != .ordinaryRemoveStillPresent
+            if scenario == .hideUnknown || scenario == .ordinaryRemoveUnknown { throw TransportFailure.noReply("synthetic lost removal ACK") }
+            var remaining = queue("r0")
+            if scenario == .ordinaryRemoveWorkspace { remaining["ws"] = "other-workspace" }
+            if scenario == .ordinaryRemoveIdentity { remaining["identity"] = identity("r0", session: "source-after-delete-session") }
+            response = try json(remaining)
         } else {
             try require(request.method == "GET", "Unexpected mutation")
             if path == "/api/health" { return try json(["api": 1, "version": "synthetic"]) }
@@ -189,7 +200,9 @@ private actor Network {
                 if scenario == .fullRevision || scenario == .ordinaryFullRevision { item["updated"] = "2026-11-16T08:00:02Z" }
                 if scenario == .fullTarget { item["target"] = identity(run, session: "other-native") }
                 response = try json(["run": run, "ws": scenario == .fullWorkspace ? "other-workspace" : "w1",
-                    "identity": identity(scenario == .fullIdentity || scenario == .ordinaryFullOwner ? "r-wrong" : run), "state": "stopped", "ended": true,
+                    "identity": identity(scenario == .fullIdentity || scenario == .ordinaryFullOwner ? "r-wrong" : run,
+                                         session: scenario == .sourceFullIdentityDrift ? "source-after-full-session" : scenario.sourceIdentityMoved ? "source-current-session" : "native-shared"),
+                    "state": "stopped", "ended": true,
                     "later": scenario == .fullLater ? true : id == "future", "item": item])
             }
         }
@@ -316,7 +329,7 @@ private actor Pairing {
         return
     }
     if scenario.ordinarySource {
-        if scenario == .ordinaryUnknown || scenario == .ordinaryCleanup {
+        if scenario == .ordinaryUnknown || scenario == .ordinaryCleanup || scenario.ordinaryRemoval {
             state.draft = original; f.model.sendDraft(for: state.key)
             try await eventually("Original current attempt unknown") {
                 if case .unknown = state.deliveries.first?.status { return true }; return false
@@ -330,6 +343,40 @@ private actor Pairing {
                     "Plain unknown was forged into Native or pending/foreign rows leaked into its source")
         f.model.hideNativeHistoryItem(row, in: read)
         try require(read.hideTasks.isEmpty && read.hidingIDs.isEmpty, "Plain unknown used native-hide")
+        if scenario.ordinaryRemoval {
+            let delayed = scenario == .ordinaryRemoveClose || scenario == .ordinaryRemoveRepair
+            if delayed { await f.network.hold("/api/agents/r0/queue/same") }
+            f.model.removeUnknownHistoryItem(row, in: read)
+            f.model.removeUnknownHistoryItem(row, in: read)
+            guard let task = read.hideTasks[row.id] else { throw Failure("Ordinary DELETE was not registered") }
+            if delayed {
+                try await eventually("Ordinary DELETE held") { await f.network.waiting }
+                if scenario == .ordinaryRemoveRepair {
+                    f.model.pair(code: Fixture.code("a"), name: "synthetic", deviceName: "synthetic")
+                    try await eventually("Removal owner re-paired") { !f.model.pairing && f.model.selectedHost?.deviceID != f.a.deviceID && f.model.status.isConnected }
+                } else { f.model.closeNativeHistory(read) }
+                await f.network.release()
+            }
+            await task.value
+            if delayed {
+                try require(task.isCancelled && read.queue == nil && read.hideProblem == nil && read.hiddenIDs.isEmpty,
+                            "Late DELETE receipt restored a closed/retired owner")
+            } else if [.ordinaryRemoveUnknown, .ordinaryRemoveWorkspace, .ordinaryRemoveIdentity, .ordinaryRemoveStillPresent].contains(scenario) {
+                try require(read.hideProblem?.contains("Removal was not confirmed.") == true && read.rows.count == 1 && read.hiddenIDs.isEmpty,
+                            "Unknown/invalid DELETE response implied removal or crossed its source identity")
+                f.model.removeUnknownHistoryItem(row, in: read)
+            } else {
+                try await eventually("Current source summary refreshed after ordinary removal") { state.nativeHistorySources.isEmpty && state.nativeHistoryRead == nil }
+                try require(state.allQueueItems.contains { $0.id == row.id }, "Ordinary removal touched the same ID in the current run")
+            }
+            let writes = await f.network.writes
+            try require(writes.count == 2 && writes[0].0 == "POST" && writes[1].0 == "DELETE" && writes[1].1 == "/api/agents/r0/queue/same",
+                        "Ordinary removal duplicated POST/DELETE or used native-hide")
+            guard case .unknown = state.deliveries.first?.status else { throw Failure("Ordinary removal promoted the original current receipt") }
+            try require(state.deliveries[0].operation.text == original && !state.deliveries[0].status.canRetry && state.deliveries[0].queueItemID == nil,
+                        "Ordinary removal changed current operation/body/retry state")
+            return
+        }
         let delayed = scenario == .ordinaryFullClose || scenario == .ordinaryRepair
         if delayed { await f.network.hold("/api/agents/r0/queue/same") }
         f.model.openNativeHistoryItem(row, in: read, copy: true)
@@ -421,7 +468,7 @@ private actor Pairing {
         return
     }
     try await eventually("Source loaded or explicit error") { !read.loading && (read.queue != nil || read.problem != nil) }
-    if [.missing, .wrongWorkspace, .wrongCurrentWorkspace, .wrongRun, .wrongIdentity, .sourceIdentitySession, .wrongSourceSession, .noMatchingRows].contains(scenario) {
+    if [.missing, .wrongWorkspace, .wrongCurrentWorkspace, .wrongRun, .wrongIdentity, .wrongSourceSession, .noMatchingRows].contains(scenario) {
         try require(read.problem != nil && read.rows.isEmpty && state.queue?.run == "r1", "Missing/invalid source was presented as usable history")
         if scenario == .wrongSourceSession { let gets = await f.network.sourceGets; try require(gets == 0, "Cross-session descriptor authorized an original queue GET") }
         return
@@ -500,7 +547,7 @@ private actor Pairing {
         return
     }
     await task.value
-    if [.fullRevision, .fullWorkspace, .fullIdentity, .fullTarget, .fullLater].contains(scenario) {
+    if [.fullRevision, .fullWorkspace, .fullIdentity, .fullTarget, .fullLater, .sourceFullIdentityDrift].contains(scenario) {
         try require(full.problem != nil && f.model.queueItemText(full) == nil, "Changed full revision/owner/target/later authorized copy")
         return
     }

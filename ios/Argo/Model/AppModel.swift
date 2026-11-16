@@ -527,7 +527,7 @@ final class AppModel {
                 guard isCurrentHost(epoch), self.connection === connection, nativeHistoryIsCurrent(read),
                       read.loadID == loadID else { return }
                 guard queue.run == read.source.sourceRun, queue.ws == read.key.workspace,
-                      queue.identity == read.source.target else {
+                      let identity = queue.identity, identity.isValid, identity.run == read.source.sourceRun else {
                     throw ArgoClientError.invalidResponse(.message("The original record source changed. Refresh the conversation."))
                 }
                 read.queue = queue
@@ -559,8 +559,18 @@ final class AppModel {
     }
 
     func hideNativeHistoryItem(_ item: ArgoQueuedMessage, in read: NativeHistoryRead) {
+        guard item.native != nil else { return }
+        removeHistoryRecord(item, in: read)
+    }
+
+    func removeUnknownHistoryItem(_ item: ArgoQueuedMessage, in read: NativeHistoryRead) {
+        guard item.native == nil, !item.deliveryUnknown.isEmpty else { return }
+        removeHistoryRecord(item, in: read)
+    }
+
+    private func removeHistoryRecord(_ item: ArgoQueuedMessage, in read: NativeHistoryRead) {
         guard nativeHistoryIsCurrent(read), status.isConnected, let connection,
-              connection.host.id == read.key.host, read.rows.contains(item), item.native != nil, read.hideProblem == nil,
+              connection.host.id == read.key.host, read.rows.contains(item), let sourceQueue = read.queue, read.hideProblem == nil,
               !read.hidingIDs.contains(item.id) else { return }
         read.hidingIDs.insert(item.id)
         let epoch = hostEpoch
@@ -568,9 +578,23 @@ final class AppModel {
             guard let self, let read else { return }
             defer { read.hideTasks[item.id] = nil; read.hidingIDs.remove(item.id) }
             do {
-                try await connection.hideNativeHandoff(run: read.source.sourceRun, itemID: item.id)
+                let remaining: ArgoQueue?
+                if item.native != nil {
+                    try await connection.hideNativeHandoff(run: read.source.sourceRun, itemID: item.id)
+                    remaining = nil
+                } else {
+                    remaining = try await connection.removeQueueItem(run: read.source.sourceRun, itemID: item.id)
+                }
                 try Task.checkCancellation()
                 guard isCurrentHost(epoch), self.connection === connection, nativeHistoryIsCurrent(read) else { return }
+                if let remaining {
+                    guard remaining.run == read.source.sourceRun, remaining.ws == read.key.workspace,
+                          remaining.identity == sourceQueue.identity,
+                          !(remaining.items + remaining.later).contains(where: { $0.id == item.id }) else {
+                        throw ArgoClientError.invalidResponse(.message("The queue item changed. Refresh the conversation."))
+                    }
+                    read.queue = remaining
+                }
                 read.hiddenIDs.insert(item.id)
                 if read.queueItemRead?.source.id == item.id { read.closeQueueItem() }
                 startConversationPolling()
@@ -584,7 +608,10 @@ final class AppModel {
                 case ArgoClientError.http(let status, let message, _): detail = message.isEmpty ? "HTTP \(status)" : message
                 default: detail = L10n.error(error)
                 }
-                read.hideProblem = L10n.text("Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged.") + "\n" + detail
+                let message = item.native != nil
+                    ? "Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged."
+                    : "Removal was not confirmed. Refresh the records before trying again. Terminal input is unchanged."
+                read.hideProblem = L10n.text(message) + "\n" + detail
             }
         }
     }
