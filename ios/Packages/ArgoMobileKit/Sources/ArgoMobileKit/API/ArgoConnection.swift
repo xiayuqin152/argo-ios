@@ -209,6 +209,16 @@ public actor ArgoConnection {
         try await get("/api/agents/\(try Self.managedSegment(run))/queue")
     }
 
+    /// Hides only an Argo native handoff record. Codex input is not retracted.
+    /// No resend, auth replay, or assumed response body is involved.
+    public func hideNativeHandoff(run: String, itemID: String) async throws {
+        let run = try Self.managedSegment(run)
+        guard !itemID.isEmpty else {
+            throw ArgoClientError.refusedLocally(.message("The handoff record has no identifier. Refresh the conversation."))
+        }
+        _ = try await perform(HTTPRequest(method: "DELETE", target: "/api/agents/\(run)/queue/\(Self.segment(itemID))/native"), authRetry: false)
+    }
+
     // MARK: Read markers
 
     /// Self-registration is explicit and idempotent. It never changes or

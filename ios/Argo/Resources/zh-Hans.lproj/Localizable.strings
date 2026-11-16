@@ -370,3 +370,18 @@
 "The signed app needs an explicit APNs environment and bundle topic." = "签名应用需要明确的 APNs 环境和 bundle topic。";
 "This notification's workspace is no longer available." = "此提醒对应的工作区已不可用。";
 "This notification's Agent is no longer available." = "此提醒对应的 Agent 已不可用。";
+
+/* Native handoff status */
+"Codex Received" = "Codex 已接收";
+"Native Receipt Unknown" = "原生接收结果未知";
+"Codex has received this input. This does not confirm model completion." = "Codex 已接收这条输入，模型是否处理完成尚未确认。";
+"Reception is unknown. Check the original conversation. Do not send this input again." = "接收结果未知。请查看原会话，不要再次发送这条输入。";
+"Original Conversation" = "原会话";
+"This record belongs to a different native conversation." = "此记录属于另一个原生会话。";
+"The original conversation identity is unavailable." = "原会话身份不可用。";
+"Hide Handoff Record?" = "隐藏交接记录？";
+"Hide Record" = "隐藏记录";
+"This only hides the Argo status record. It does not cancel or retract input already received by Codex." = "此操作仅隐藏 Argo 状态记录，不会取消或撤回 Codex 已接收的输入。";
+"Native records: %lld" = "交接记录：%lld";
+"Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged." = "隐藏操作尚未确认。请刷新记录后再试；Codex 中的输入不受影响。";
+"The handoff record has no identifier. Refresh the conversation." = "交接记录缺少标识，请刷新会话。";

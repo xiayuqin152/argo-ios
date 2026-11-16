@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var pickerIdentity: ArgoAgentIdentity?
     @State private var preview: AttachmentPreview?
     @State private var inputOwner: ComposerInputOwner?
+    @State private var nativeToHide: (item: ArgoQueuedMessage, key: SessionKey)?
 
     private var attachPresentation: SeenPresentation { attachPanel.presentation }
 
@@ -90,11 +91,12 @@ struct ChatView: View {
                         QuestionCard(ask: ask, state: state).id(ask.uiID)
                     }
                     queue
-                    if !state.deliveries.isEmpty {
+                    if !state.deliveryReceipts.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.s) {
                             Text("Delivery Receipts").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
-                            ForEach(state.deliveries) { message in
-                                PendingBubble(message: message, retry: { model.retry(message) }, refresh: { model.showLatest() }, preview: openLocal)
+                            ForEach(state.deliveryReceipts) { message in
+                                PendingBubble(message: message, currentIdentity: state.transcript.identity,
+                                              retry: { model.retry(message) }, refresh: { model.showLatest() }, preview: openLocal)
                             }
                         }
                     }
@@ -130,6 +132,12 @@ struct ChatView: View {
             }
         }
         .background(Theme.pageBackground)
+        .confirmationDialog("Hide Handoff Record?", isPresented: Binding(get: { nativeToHide != nil }, set: { if !$0 { nativeToHide = nil } }),
+                            titleVisibility: .visible, presenting: nativeToHide) { selection in
+            Button("Hide Record", role: .destructive) { model.hideNativeHandoff(selection.item, for: selection.key) }
+        } message: { _ in
+            Text("This only hides the Argo status record. It does not cancel or retract input already received by Codex.")
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .navigationTitle(model.selectedAgent?.displayTitle ?? L10n.text("Conversation"))
         .navigationBarTitleDisplayMode(.inline)
@@ -346,10 +354,15 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var queue: some View {
-        if let queue = state.queue, !queue.items.isEmpty {
+        if let problem = state.nativeHideProblem {
+            NoticeBanner(text: problem, tone: .caution, lineLimit: nil) {
+                Button("Refresh Conversation") { model.refreshConversation() }
+            }
+        }
+        if let queue = state.queue, state.pendingQueueCount > 0 || !state.ordinaryQueueItems.isEmpty {
             DisclosureGroup {
                 if !queue.hold.isEmpty { Text(verbatim: queue.hold).font(Theme.Font.caption).foregroundStyle(.secondary) }
-                ForEach(queue.items) { item in
+                ForEach(state.ordinaryQueueItems) { item in
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         if let reason = state.deliveryUnknown(for: item) {
                             Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
@@ -362,13 +375,46 @@ struct ChatView: View {
                     .padding(.vertical, Theme.Space.xs)
                 }
             } label: {
-                if queue.items.contains(where: { state.deliveryUnknown(for: $0) != nil }) {
+                if state.ordinaryQueueItems.contains(where: { state.deliveryUnknown(for: $0) != nil }) {
                     Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
                         .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
                 } else {
-                    Label("\(queue.items.count) messages queued on host", systemImage: Theme.Icon.time)
+                    Label("\(state.pendingQueueCount) messages queued on host", systemImage: Theme.Icon.time)
                         .font(Theme.Font.captionStrong)
                 }
+            }
+            .padding(Theme.Space.m)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+        }
+        if state.nativeHistoryCount > 0 {
+            DisclosureGroup {
+                ForEach(state.nativeQueueItems) { item in
+                    if let native = item.native {
+                        VStack(alignment: .leading, spacing: Theme.Space.s) {
+                            Label(L10n.text(native.state == .accepted ? "Codex Received" : "Native Receipt Unknown"),
+                                  systemImage: native.state == .accepted ? "tray" : Theme.Icon.warning)
+                                .font(Theme.Font.captionStrong)
+                            NativeHandoffDetails(native: native, target: item.target, currentIdentity: state.transcript.identity)
+                            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
+                            HStack(spacing: Theme.Space.l) {
+                                CopyMessageButton(text: item.text).tapTargetHeight()
+                                Button("Hide Record") { nativeToHide = (item, state.key) }
+                                    .disabled(state.hidingNativeIDs.contains(item.id) || !model.status.isConnected)
+                                    .tapTargetHeight()
+                            }
+                            .font(Theme.Font.captionStrong)
+                        }
+                        .padding(.vertical, Theme.Space.s)
+                    }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Label("Native records: \(state.nativeHistoryCount)", systemImage: "tray")
+                    if state.nativeQueueItems.contains(where: { $0.native?.state == .unknown }) {
+                        Label("Native Receipt Unknown", systemImage: Theme.Icon.warning).foregroundStyle(Theme.cautionText)
+                    }
+                }
+                .font(Theme.Font.captionStrong)
             }
             .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))

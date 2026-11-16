@@ -373,6 +373,40 @@ final class AppModel {
             readWindow(.around(state.transcript.start), followingLatest: false)
         } else { startConversationPolling() }
     }
+
+    /// This removes only the selected Argo status record, including records
+    /// for an earlier native thread. It never sends or cancels Agent input.
+    func hideNativeHandoff(_ item: ArgoQueuedMessage, for key: SessionKey) {
+        guard active, selectedKey == key, let state = conversations[key],
+              status.isConnected, let connection, state.queue?.run == key.run,
+              state.nativeQueueItems.contains(where: { $0.id == item.id }),
+              !state.hidingNativeIDs.contains(item.id) else { return }
+        state.hidingNativeIDs.insert(item.id)
+        state.nativeHideProblem = nil
+        let epoch = hostEpoch
+        Task { [weak self] in
+            guard let self else { return }
+            defer { state.hidingNativeIDs.remove(item.id) }
+            do {
+                try await connection.hideNativeHandoff(run: key.run, itemID: item.id)
+                guard conversations[key] === state else { return }
+                state.didHideNativeRecord(item.id)
+                if isCurrentHost(epoch), selectedKey == key {
+                    refreshConversation()
+                    refreshAgents()
+                }
+            } catch {
+                guard conversations[key] === state else { return }
+                let detail: String
+                switch error {
+                case ArgoClientError.deliveryUnknown(let reason): detail = L10n.error(ArgoClientError.invalidResponse(reason))
+                case ArgoClientError.http(let status, let message, _): detail = message.isEmpty ? "HTTP \(status)" : message
+                default: detail = L10n.error(error)
+                }
+                state.nativeHideProblem = L10n.text("Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged.") + "\n" + detail
+            }
+        }
+    }
     var agentRefreshAvailable: Bool {
         active && selectedHost != nil && workspaceID != nil && status != .connecting
     }

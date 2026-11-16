@@ -370,3 +370,18 @@
 "The signed app needs an explicit APNs environment and bundle topic." = "The signed app needs an explicit APNs environment and bundle topic.";
 "This notification's workspace is no longer available." = "This notification's workspace is no longer available.";
 "This notification's Agent is no longer available." = "This notification's Agent is no longer available.";
+
+/* Native handoff status */
+"Codex Received" = "Codex Received";
+"Native Receipt Unknown" = "Native Receipt Unknown";
+"Codex has received this input. This does not confirm model completion." = "Codex has received this input. This does not confirm model completion.";
+"Reception is unknown. Check the original conversation. Do not send this input again." = "Reception is unknown. Check the original conversation. Do not send this input again.";
+"Original Conversation" = "Original Conversation";
+"This record belongs to a different native conversation." = "This record belongs to a different native conversation.";
+"The original conversation identity is unavailable." = "The original conversation identity is unavailable.";
+"Hide Handoff Record?" = "Hide Handoff Record?";
+"Hide Record" = "Hide Record";
+"This only hides the Argo status record. It does not cancel or retract input already received by Codex." = "This only hides the Argo status record. It does not cancel or retract input already received by Codex.";
+"Native records: %lld" = "Native records: %lld";
+"Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged." = "Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged.";
+"The handoff record has no identifier. Refresh the conversation." = "The handoff record has no identifier. Refresh the conversation.";

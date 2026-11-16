@@ -42,6 +42,10 @@ struct SlotRow: View {
                         Image(systemName: Theme.Icon.time)
                         Text("\(session.card.queued) queued")
                     }
+                    if session.card.nativeHistory > 0 {
+                        Image(systemName: "tray")
+                        Text("Native records: \(session.card.nativeHistory)")
+                    }
                 }
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)

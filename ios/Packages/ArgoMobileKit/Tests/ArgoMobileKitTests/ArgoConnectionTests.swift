@@ -244,6 +244,49 @@ final class ArgoConnectionTests: XCTestCase {
         XCTAssertEqual(t.requests.map(\.request.method), ["POST", "GET"])
     }
 
+    func testNativeHandoffWireKeepsOriginalIdentityAndSeparateCounts() async throws {
+        for state in ["accepted", "unknown", "future-state"] {
+            let item = "{\"id\":\"native-1\",\"text\":\"original input\",\"target\":{\"run\":\"\(run)\",\"engine\":\"codex\",\"session\":\"original-thread\"},\"native\":{\"state\":\"\(state)\",\"note\":\"original note\"}}"
+            let queue = "{\"run\":\"\(run)\",\"items\":[\(item)],\"pending\":0,\"nativeHistory\":1}"
+            let t = FakeTransport { req in .json(200, req.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue) }
+            let c = connection(t)
+            let receipt = try await c.send(ArgoOutgoingMessage(run: run, text: "original input", target: ArgoAgentIdentity(run: run, engine: "codex", session: "original-thread")))
+            XCTAssertFalse(receipt.delivered)
+            XCTAssertEqual(receipt.queued?.native?.state, state == "accepted" ? .accepted : .unknown)
+            XCTAssertEqual(receipt.queued?.native?.note, "original note")
+            XCTAssertEqual(receipt.queued?.target?.session, "original-thread")
+            XCTAssertEqual(receipt.queue.pending, 0)
+            XCTAssertEqual(receipt.queue.nativeHistory, 1)
+            let fresh = try await c.queue(run: run)
+            XCTAssertEqual(fresh.items.first, receipt.queued)
+            XCTAssertEqual(t.requests.count, 2)
+        }
+        let card = try JSONDecoder().decode(ArgoAgentCard.self, from: Data(#"{"run":"r1","queued":0,"nativeHistory":2}"#.utf8))
+        XCTAssertEqual(card.queued, 0)
+        XCTAssertEqual(card.nativeHistory, 2)
+    }
+
+    func testNativeHideUsesOnlyDedicatedDeleteWithoutReplay() async throws {
+        let t = FakeTransport { _ in .json(204, "") }
+        let c = connection(t)
+        try await c.hideNativeHandoff(run: run, itemID: "native/a b")
+        let sent = try XCTUnwrap(t.requests.first)
+        XCTAssertEqual(sent.request.method, "DELETE")
+        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue/native%2Fa%20b/native")
+        XCTAssertNil(sent.request.body)
+        XCTAssertNil(sent.request.header("X-Loom-Attempt"))
+        XCTAssertFalse(sent.reuse)
+        await assertRefused { try await c.hideNativeHandoff(run: self.run, itemID: "") }
+        await assertRefused { try await c.hideNativeHandoff(run: "unmanaged:t1", itemID: "id") }
+        XCTAssertEqual(t.requests.count, 1)
+        let denied = FakeTransport { _ in .json(401, "{}") }
+        do {
+            try await connection(denied).hideNativeHandoff(run: run, itemID: "id")
+            XCTFail("expected auth error")
+        } catch {}
+        XCTAssertEqual(denied.requests.count, 1)
+    }
+
     func testDuplicateUnknownReceiptRemainsUnknown() async throws {
         let result = #"{"delivered":false,"item":{"id":"m1","deliveryUnknown":"lost acknowledgement"},"queue":{"items":[]}}"#
         let t = FakeTransport { _ in .json(200, result, headers: [("X-Loom-Duplicate", "1")]) }

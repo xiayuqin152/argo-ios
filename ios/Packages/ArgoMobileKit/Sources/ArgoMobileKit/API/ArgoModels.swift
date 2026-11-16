@@ -315,6 +315,8 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
     public let done: Int
     /// Messages waiting in the run's queue.
     public let queued: Int
+    /// Read-only native handoffs, separate from messages waiting to send.
+    public let nativeHistory: Int
     public let error: String
     public let endReason: String
     public let exitCode: Int?
@@ -333,7 +335,7 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case run, ws, terminal, profile, engine, cli, leader, title, latestTitle, activity, reply, status, state,
              stateText, failKind, failNote, stateStartedAt, interrupted, unread, attention, ask, waitingIDs, plan, tasks, done, queued, error,
-             endReason, exitCode, cwd, created, updated
+             endReason, exitCode, cwd, created, updated, nativeHistory
     }
 
     public init(from decoder: Decoder) throws {
@@ -364,6 +366,7 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
         tasks = try c.value(.tasks, or: 0)
         done = try c.value(.done, or: 0)
         queued = try c.value(.queued, or: 0)
+        nativeHistory = try c.value(.nativeHistory, or: 0)
         error = try c.value(.error, or: "")
         endReason = try c.value(.endReason, or: "")
         exitCode = try c.decodeIfPresent(Int.self, forKey: .exitCode)
@@ -407,6 +410,7 @@ extension ArgoAgentCard {
         tasks = 0
         done = 0
         queued = 0
+        nativeHistory = 0
         error = ""
         endReason = ""
         exitCode = nil
@@ -743,6 +747,24 @@ public struct ArgoTurnAnswer: Decodable, Equatable, Sendable {
 
 // MARK: Sending
 
+/// A handoff acknowledgement, never a native chat record or model completion.
+public struct ArgoNativeHandoff: Decodable, Equatable, Sendable {
+    public enum State: Equatable, Sendable { case accepted, unknown }
+    public let state: State
+    public let note: String
+    public let unrecognizedState: String?
+
+    private enum CodingKeys: String, CodingKey { case state, note }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Presence of native is read-only even when a newer host adds a state.
+        let raw = try c.value(.state, or: "")
+        state = raw == "accepted" ? .accepted : .unknown
+        unrecognizedState = raw == "accepted" || raw == "unknown" ? nil : raw
+        note = try c.value(.note, or: "")
+    }
+}
+
 /// One queued message (queueItem).
 public struct ArgoQueuedMessage: Decodable, Equatable, Identifiable, Sendable {
     public let id: String
@@ -752,8 +774,11 @@ public struct ArgoQueuedMessage: Decodable, Equatable, Identifiable, Sendable {
     /// Nonempty when the host may already have submitted this item. It keeps
     /// the record for review and forbids automatic delivery or manual resend.
     public let deliveryUnknown: String
+    public let native: ArgoNativeHandoff?
+    /// Original server-confirmed destination; never rebound to the current chat.
+    public let target: ArgoAgentIdentity?
 
-    private enum CodingKeys: String, CodingKey { case id, text, source, created, deliveryUnknown }
+    private enum CodingKeys: String, CodingKey { case id, text, source, created, deliveryUnknown, native, target }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.value(.id, or: "")
@@ -761,6 +786,8 @@ public struct ArgoQueuedMessage: Decodable, Equatable, Identifiable, Sendable {
         source = try c.value(.source, or: "")
         created = try c.value(.created, or: "")
         deliveryUnknown = try c.value(.deliveryUnknown, or: "")
+        native = try c.decodeIfPresent(ArgoNativeHandoff.self, forKey: .native)
+        target = try c.decodeIfPresent(ArgoAgentIdentity.self, forKey: .target)
     }
 }
 
@@ -771,14 +798,19 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
     public let state: String
     public let hold: String
     public let items: [ArgoQueuedMessage]
+    /// Ordinary unsent and scheduled messages. Absent on pre-handoff hosts.
+    public let pending: Int?
+    public let nativeHistory: Int
 
-    private enum CodingKeys: String, CodingKey { case run, state, hold, items }
+    private enum CodingKeys: String, CodingKey { case run, state, hold, items, pending, nativeHistory }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         run = try c.value(.run, or: "")
         state = try c.value(.state, or: "")
         hold = try c.value(.hold, or: "")
         items = try c.value(.items, or: [])
+        pending = try c.decodeIfPresent(Int.self, forKey: .pending)
+        nativeHistory = try c.value(.nativeHistory, or: 0)
     }
 }
 
