@@ -16,6 +16,11 @@ private enum Scenario: String {
     case disabledErrorDuringOpen, currentDuringOpen, cancelledDisableDuringOpen, retiredBeforeOpen
     case pairCancelEmpty, pairCancelExisting, pairCancelRepair, pairBackgroundEmpty, pairBackgroundExisting
     case pairCancelBeforeSave, pairCancelLate, pairBackgroundLate, pairDuplicate, pairForgetLate, pairForgetDuringRestore, pairNewFailed
+    case creationVisible, creationNotificationOther, creationNotificationCurrent
+
+    var checksCreationLifecycle: Bool {
+        [.creationVisible, .creationNotificationOther, .creationNotificationCurrent].contains(self)
+    }
 
     var checksPairingLifecycle: Bool {
         switch self {
@@ -99,6 +104,14 @@ private final class Tokens: DeviceTokenStoring, @unchecked Sendable {
 // pairing, cancellation, selection and receipt reconciliation are production.
 private actor Network {
     let terminalUnknown: Bool
+    let creationEnabled: Bool
+    private var creation: CheckedContinuation<HTTPResponse, Never>?
+    private var creationResponse: HTTPResponse?
+    var creationWaiting: Bool { creation != nil }
+    func releaseCreation() {
+        if let creationResponse { creation?.resume(returning: creationResponse) }
+        creation = nil; creationResponse = nil
+    }
     private(set) var messages: [(UUID, HTTPRequest)] = []
     private(set) var requests: [(UUID, HTTPRequest)] = []
     private(set) var fullReads: [UUID] = []
@@ -121,7 +134,10 @@ private actor Network {
     var agentsWaiting: Bool { agentDirectory != nil }
     var fullWaiting: Bool { full != nil }
     var postWaiting: Bool { post != nil }
-    init(terminalUnknown: Bool) { self.terminalUnknown = terminalUnknown }
+    init(terminalUnknown: Bool, creationEnabled: Bool = false) {
+        self.terminalUnknown = terminalUnknown
+        self.creationEnabled = creationEnabled
+    }
     func holdDirectory(_ id: UUID) { pauseDirectory = id }
     func holdAgents(_ id: UUID) { pauseAgents = id }
     func cancelNextUnregister() { cancelUnregister = true }
@@ -174,6 +190,13 @@ private actor Network {
             return try json(["enabled": false])
         }
         if request.method == "POST" {
+            if creationEnabled && path == "/api/agents" {
+                let body = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
+                creationResponse = try json(["id": "created-terminal", "ws": body["ws"]!, "cwd": body["cwd"]!,
+                    "context": body["context"]!, "alive": true,
+                    "agent": ["run": "created-run", "profile": body["profile"]!, "engine": "codex", "leader": false]])
+                return await withCheckedContinuation { creation = $0 }
+            }
             try require(path == "/api/agents/r1/queue" && !reuse && url.queryItems == [URLQueryItem(name: "bounded", value: "1")],
                         "Notification manufactured or replayed a conversation write")
             let body = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
@@ -189,9 +212,14 @@ private actor Network {
         }
         try require(request.method == "GET", "Unexpected non-read navigation request")
         if path == "/api/health" { return try json(["api": 1, "version": "synthetic"]) }
-        if path == "/api/projects" || path == "/api/agents/profiles" { return try json([]) }
+        if path == "/api/projects" { return try json([]) }
+        if path == "/api/agents/profiles" {
+            return try json(creationEnabled ? [["name": "Fixture Codex", "engine": "codex", "available": true]] : [])
+        }
         if path == "/api/workspaces" {
-            let response = try json([["id": "w1"]])
+            var workspace: [String: Any] = ["id": "w1"]
+            if creationEnabled { workspace["roots"] = [["path": "/synthetic/creation", "missing": false]] }
+            let response = try json([workspace])
             if pauseDirectory == host.id {
                 pauseDirectory = nil; directoryResponse = response
                 return await withCheckedContinuation { directory = $0 }
@@ -285,13 +313,15 @@ private struct Transport: ArgoHTTPTransport {
     init(_ scenario: Scenario) async throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("argo-notification-combination-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        network = Network(terminalUnknown: scenario == .pushB)
+        network = Network(terminalUnknown: scenario == .pushB, creationEnabled: scenario.checksCreationLifecycle)
         let pairing = pairing, network = network
         store = ArgoHostStore(fileURL: directory.appendingPathComponent("hosts.json"), tokens: tokens) { code, _ in try await pairing.pair(code) }
         a = try await store.pair(code: Self.code("a.fixture.invalid"), deviceName: "synthetic")
         b = try await store.pair(code: Self.code("b.fixture.invalid"), deviceName: "synthetic")
         let factory: AppModel.ConnectionFactory = { host, credential in ArgoConnection(host: host, transport: Transport(network: network, host: host, credential: credential)) }
-        model = AppModel(store: store, pendingCreations: MemoryCreations(), makeConnection: factory)
+        let pending: any PendingCreationStoring = scenario.checksCreationLifecycle
+            ? PendingCreationFile(url: directory.appendingPathComponent("pending.json")) : MemoryCreations()
+        model = AppModel(store: store, pendingCreations: pending, makeConnection: factory)
         NotificationTestPlatform.defaults.set([a.id.uuidString, b.id.uuidString], forKey: "argo.push.enabledHosts.v1")
         root = RootNotificationHarness(model: model)
         PhoneNotifications.shared.attach(store: store, makeConnection: factory)
@@ -656,11 +686,56 @@ private final class ConnectionCalls: @unchecked Sendable {
     print("PASS \(scenario.rawValue): current registration owns exact host/run; all drafts preserved; POST=0")
 }
 
+@MainActor private func checkCreationLifecycle(_ scenario: Scenario) async throws {
+    let f = try await Fixture(scenario)
+    defer { f.finish() }
+    let original = f.model.conversation!
+    original.draft = "Keep the existing conversation draft"
+    f.model.presentNewSession()
+    try await eventually("Creation launchers") { !f.model.newSession.profilesLoading && !f.model.newSession.profiles.isEmpty }
+    f.model.newSession.draft.cwd = "/synthetic/creation"
+    f.model.newSession.draft.profile = "Fixture Codex"
+    f.model.newSession.draft.prompt = "First message for the new Agent"
+    f.model.startNewSession()
+    f.model.startNewSession()
+    try await eventually("Creation POST held") { await f.network.creationWaiting }
+    guard let started = f.model.newSession.current else { throw Failure("No original creation intent") }
+    let notifiedRun = scenario == .creationNotificationOther ? "r2" : "r1"
+    if scenario != .creationVisible {
+        try f.tap(f.route(f.a, run: notifiedRun))
+        guard let navigation = task(f.model, label: "notificationTask") else { throw Failure("No real notification navigation Task") }
+        await navigation.value
+        try require(f.model.selectedKey == f.key(f.a, run: notifiedRun) && !f.model.newSessionShown &&
+                    f.model.notificationProblem == nil, "Notification did not finish before the creation receipt")
+    }
+    await f.network.releaseCreation()
+    try await eventually("Creation receipt saved") {
+        !f.model.newSession.creating && f.model.newSession.pending.contains { $0.context == started.context && $0.receipt != nil }
+    }
+    guard let intent = f.model.newSession.pending.first(where: { $0.context == started.context }), let key = intent.key else {
+        throw Failure("Creation lost its original receipt")
+    }
+    let restored = NewSessionModel(store: PendingCreationFile(url: f.directory.appendingPathComponent("pending.json")))
+    let posts = await f.network.requests.filter { $0.1.method == "POST" }
+    print("OBSERVED \(scenario.rawValue): selectedRun=\(f.model.selectedKey?.run ?? "nil"), creationPOST=\(posts.count), receiptRestored=\(restored.pending.first?.key == key)")
+    try require(intent.host == f.a.id && intent.workspace == "w1" && restored.pending.first?.key == key &&
+                posts.count == 1 && posts[0].1.target == "/api/agents" &&
+                original.draft == "Keep the existing conversation draft", "Creation changed receipt, draft or POST ownership")
+    let expected = scenario == .creationVisible ? key : f.key(f.a, run: notifiedRun)
+    try require(f.model.selectedKey == expected && !f.model.newSessionShown,
+                "Late creation took navigation from the dismissed creation sheet")
+    f.model.openCreation(intent)
+    try require(f.model.selectedKey == key && f.model.conversation?.creation?.context == started.context &&
+                f.model.conversation?.creation?.text == "First message for the new Agent", "Open Agent lost the saved receipt or first message")
+    print("PASS \(scenario.rawValue): visible creation owns automatic navigation; dismissed creation remains recoverable; POST=1")
+}
+
 @main private struct NavigationCheck {
     @MainActor static func main() async {
         guard let argument = CommandLine.arguments.dropFirst().first, let scenario = Scenario(rawValue: argument) else { print("FAIL missing scenario"); exit(2) }
         do {
-            if scenario.checksRegistrationLifecycle { try await checkRegistrationLifecycle(scenario) }
+            if scenario.checksCreationLifecycle { try await checkCreationLifecycle(scenario) }
+            else if scenario.checksRegistrationLifecycle { try await checkRegistrationLifecycle(scenario) }
             else if scenario.checksPairingLifecycle { try await checkPairingLifecycle(scenario) }
             else { try await check(scenario) }
         }

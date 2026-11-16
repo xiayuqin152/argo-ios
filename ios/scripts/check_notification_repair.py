@@ -20,7 +20,8 @@ CASES = ["pushB", "sameHostRun", "userB", "forget", "repair", "reconnect", "pair
          "pairCancelRepair", "pairBackgroundEmpty", "pairBackgroundExisting", "pairCancelBeforeSave", "pairCancelLate",
          "pairBackgroundLate", "pairDuplicate", "pairForgetLate", "pairForgetDuringRestore", "pairNewFailed",
          "disabledDuringOpen", "rotatedDuringOpen", "disabledDuringAgents", "rotatedDuringAgents",
-         "disabledErrorDuringOpen", "currentDuringOpen", "cancelledDisableDuringOpen", "retiredBeforeOpen"]
+         "disabledErrorDuringOpen", "currentDuringOpen", "cancelledDisableDuringOpen", "retiredBeforeOpen",
+         "creationVisible", "creationNotificationOther", "creationNotificationCurrent"]
 
 
 def main():

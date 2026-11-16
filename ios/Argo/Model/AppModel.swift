@@ -695,7 +695,9 @@ final class AppModel {
         let host = hostEpoch, workspaceRevision = workspaceEpoch
         newSession.start(host: hostID, workspace: workspace, using: connection) { [weak self] intent in
             guard let self else { return }
-            adoptCreation(intent, navigate: isCurrentHost(host) && workspaceEpoch == workspaceRevision)
+            // A notification can dismiss creation without changing its host or
+            // workspace. Keep the receipt, but leave that newer navigation alone.
+            adoptCreation(intent, navigate: newSessionShown && isCurrentHost(host) && workspaceEpoch == workspaceRevision)
         }
     }
 
