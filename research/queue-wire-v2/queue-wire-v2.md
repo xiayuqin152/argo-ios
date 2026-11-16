@@ -92,3 +92,24 @@ Native rows offer view/copy and the existing explicit hide only; accepted,
 unknown and unrecognized native states cannot be edited or sent. Preview/full
 reads do not project chat. The original native transcript continues to supply
 the real user message once through the existing transcript reader.
+
+## Restored native sources (optional)
+
+Queue views and their receipts may add `nativeSources` as an optional array of
+`{sourceRun,target,nativeHistory}`. Each entry references an earlier run's
+read-only handoffs with the same workspace, engine, native home and native
+session. `sourceRun` is that original run; `target` retains its original
+terminal-agent identity. No item body is copied into this reference or into the
+resumed run.
+
+Queue and Agent-card `nativeHistory` counts aggregate current-run and source
+records. `items`, `later` and `pending` still belong only to the current run.
+Missing or null `nativeSources` means the host did not provide this capability;
+it does not prove that no earlier records exist.
+
+A consumer reads the original queue and full items through the original
+`sourceRun` endpoints. Explicit hide likewise uses the original run and item ID,
+with the existing target, revision and owner checks. Sources never become
+current send tasks and are not automatically resent. This extension requires a
+host containing `dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent
+fix, rather than merely an older queue-wire-v2 host.

@@ -29,6 +29,20 @@ CLI handoff; turn completion is read from the native conversation. Native
 hide only; hiding a record leaves the CLI input unchanged. Unknown sends retain
 their evidence for readback and are never automatically resent.
 
+A resumed native session may also provide optional `nativeSources` entries of the
+form `{sourceRun,target,nativeHistory}`. Each entry references older read-only
+handoffs with the same workspace, engine, native home and native session, and
+keeps the original terminal-agent identity. The reference carries no item body.
+Queue and Agent-card `nativeHistory` counts include these sources; `items`,
+`later` and `pending` still describe only the current run. A missing or null
+`nativeSources` field means the host did not provide this capability, not that
+no earlier records exist. Consuming clients must keep the sources separate from
+the current send queue and use the original `sourceRun` queue, full-item and
+native-hide APIs with the original item ID, target and revision/owner checks.
+They must not automatically resend a source item. This requires a host containing
+`dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent fix; running-host
+support still needs separate validation.
+
 | Capability | Client request | Required host contract |
 | --- | --- | --- |
 | Queue preview | `GET /api/agents/{run}/queue?bounded=1` | Root `bounded:true`, `byteLimit:8388608`; the entire encoded JSON body, including its final newline, is strictly smaller than 8,388,608 bytes (8 MiB). |
