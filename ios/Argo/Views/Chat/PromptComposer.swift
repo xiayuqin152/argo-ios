@@ -23,11 +23,12 @@ struct PromptComposer: View {
     let hasAttachments: Bool
     let attach: () -> Void
     let paste: ([NSItemProvider]) -> Void
-    @State private var selection: TextSelection?
-    @State private var parkedSelection: TextSelection?
+    @State private var selection: NSRange?
+    @State private var parkedSelection: NSRange?
     @State private var pagePresentation = SeenPresentation()
     @State private var sentFromPage = false
-    @FocusState private var focused: Bool
+    @State private var focused = false
+    @AppStorage(ReturnSends.enabledKey) private var returnSends = false
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -74,18 +75,22 @@ struct PromptComposer: View {
         ComposerBoxLayout(open: expanded, spacing: Theme.Space.xs,
                           rowGap: Theme.Space.l, rowLeading: Theme.Space.s,
                           rowTrailing: Theme.Space.s, rowBottom: expanded ? Theme.Space.s : 0) {
-            TextField(placeholder, text: draft,
-                      selection: pagePresentation.owner == nil ? $selection : $parkedSelection, axis: .vertical)
-                .font(Theme.Font.body)
-                .readingContent()
-                .lineLimit(1...Theme.Shell.composerPhoneMaximumLines)
-                .focused($focused)
-                .returnSends(text: draft, canSend: canSend && input.acceptsInput,
-                             paused: !focused || pagePresentation.owner != nil || !input.acceptsInput) {
+            ComposerTextInput(text: draft,
+                              selection: pagePresentation.owner == nil ? $selection : $parkedSelection,
+                              focused: $focused, maximumLines: Theme.Shell.composerPhoneMaximumLines,
+                              returnSends: returnSends, canSend: canSend,
+                              acceptsInput: { input.acceptsInput && pagePresentation.owner == nil }) {
                     commitMarkedText()
                     send()
                 }
-                .textFieldStyle(.plain)
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(verbatim: placeholder).font(Theme.Font.body)
+                            .foregroundStyle(.tertiary)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                }
+                .readingContent()
                 .padding(.leading, Theme.Space.l)
                 .padding(.trailing, expanded ? Theme.Size.tapTarget : Theme.Space.xs)
                 .padding(.vertical, Theme.Space.m)
@@ -162,7 +167,7 @@ struct PromptComposer: View {
     private func enlarge() {
         guard input.acceptsInput, pagePresentation.owner == nil else { return }
         if focused { commitMarkedText() }
-        else { selection = TextSelection(insertionPoint: text.endIndex) }
+        else { selection = NSRange(location: (text as NSString).length, length: 0) }
         sentFromPage = false
         pagePresentation.setPresented(true, in: model, conversation: input.state.key)
         focused = false
