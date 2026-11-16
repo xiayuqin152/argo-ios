@@ -329,8 +329,9 @@ final class NewSessionModel {
     func terminalGone(_ key: SessionKey) -> Bool {
         let remaining = pending.filter { $0.key != key }
         guard remaining.count != pending.count else { return false }
+        let finishedCurrent = currentContext != nil && !remaining.contains { $0.context == currentContext }
         pending = remaining
-        if current == nil { currentContext = nil; draft.prompt = "" }
+        if finishedCurrent { currentContext = nil; draft.prompt = "" }
         do {
             try store.save(remaining)
         } catch { storageProblem = L10n.error(error) }
