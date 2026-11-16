@@ -337,7 +337,7 @@ final class ArgoConnectionTests: XCTestCase {
     func testHTTPErrorsCarryLoomdMessageAndCode() async {
         let t = FakeTransport { _ in .json(409, #"{"error":"Agent 的终端已退出，没有写入","detail":"exit 1","code":"terminal_exited"}"#) }
         do {
-            _ = try await connection(t).send(ArgoOutgoingMessage(run: run, text: "x", target: nil))
+            _ = try await connection(t).queue(run: run)
             XCTFail("expected 409")
         } catch let error as ArgoClientError {
             XCTAssertEqual(error, .http(status: 409, message: "Agent 的终端已退出，没有写入\nexit 1", code: "terminal_exited"))

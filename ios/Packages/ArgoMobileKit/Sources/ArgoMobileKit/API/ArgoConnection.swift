@@ -433,8 +433,16 @@ public actor ArgoConnection {
         if let target = message.target {
             body["target"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(target))
         }
-        let response = try await write("/api/agents/\(segment)/queue?bounded=1", body: body, attempt: message.attempt,
+        let response: HTTPResponse
+        do {
+            response = try await write("/api/agents/\(segment)/queue?bounded=1", body: body, attempt: message.attempt,
                                        maxResponseBodyBytes: ArgoQueue.previewByteLimit - 1)
+        } catch let error as ArgoClientError {
+            // A queue conflict can follow a successful paste whose Enter was
+            // held. Without proof of zero input, keep this delivery unknown.
+            guard case .http(status: 409, _, _) = error else { throw error }
+            throw ArgoClientError.deliveryUnknown(.detail(error.localizedDescription))
+        }
         try validateQueuePreview(response, write: true)
         let result: DeliverResult = try receipt(response)
         return ArgoSendReceipt(run: message.run, attempt: message.attempt, delivered: result.delivered,
