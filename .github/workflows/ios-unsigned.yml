@@ -144,3 +144,24 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
           compression-level: 0
+
+  mobile-contract:
+    runs-on: ubuntu-24.04
+    container: swift:6.2.4
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run the mobile delivery contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install --yes --no-install-recommends python3
+          core="$RUNNER_TEMP/argo-mobile-core"
+          swift build --package-path ios/Packages/ArgoMobileKit \
+            --scratch-path "$core" --jobs 2
+          python3 research/mobile-delivery-221c/check_mobile_delivery.py \
+            --swiftc "$(command -v swiftc)" --core-build "$core" \
+            --output "$RUNNER_TEMP/mobile-delivery"

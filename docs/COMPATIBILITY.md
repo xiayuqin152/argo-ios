@@ -61,8 +61,8 @@ An unsigned IPA cannot be installed directly. Device installation needs an
 Apple Developer account, a suitable certificate and provisioning profile.
 Cloud builds and artifacts apply only to the source commit recorded by each
 run. See [build records and pending validation](../ios/README.md#validation-status)
-for the earlier successful build and the SDK, UIKit and package checks still
-needed for later source changes.
+for the earlier successful build and remaining device checks. For later source
+changes, use the SDK, UIKit and package results from that commit's own run.
 
 ## Host integration reference
 

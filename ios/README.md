@@ -76,7 +76,7 @@ XcodeGen 一致性检查为在 `ios/` 中运行 `./scripts/generate.sh --check`�
 
 每次构建结果和产物仅适用于 Actions 运行记录中的源码提交。下载前请核对源码 SHA，并查看该次运行的检查结果和日志。
 
-已有成功云构建 [43859719631](https://github.com/xiayuqin152/argo-ios/actions/runs/43859719631) 仅对应 iOS 源码 `3d38c9afecc362a1bf549984c9448bfc83e18c1c`。后续源码变更的 SDK 构建、原生 UIKit 测试、归档和 IPA 验包仍待对应提交的新云结果。
+已有成功云构建 [43859719631](https://github.com/xiayuqin152/argo-ios/actions/runs/43859719631) 仅对应 iOS 源码 `3d38c9afecc362a1bf549984c9448bfc83e18c1c`。此历史记录不覆盖后续提交；后续提交的 SDK 构建、原生 UIKit 测试、归档和 IPA 验包结果，请查看对应的 Actions 运行及产物。
 
 真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。
 
