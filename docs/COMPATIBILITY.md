@@ -4,12 +4,10 @@ This repository contains the iOS client for iPhone and iPad. Connect it to an
 Argo host with the mobile capabilities below; the host is installed and upgraded
 separately.
 
-The checked backend candidate is `6d189c72eacdc2688c8fa788b2c6af13e2d38201`
-in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). It remains a
-candidate pending final integration; the final verified host revision will be
-recorded before distribution. A minimum released host version has not been
-specified, and the running service has not been deployed from this candidate.
-The iOS source candidate is tracked in [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3).
+A minimum released host version has not been specified. Host source changes
+are tracked in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44), and iOS
+source changes in [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3).
+Confirm the capabilities below on the host you deploy before pairing.
 
 | Feature | Required host capability and phone behavior |
 | --- | --- |
@@ -61,9 +59,10 @@ still require device validation.
 
 An unsigned IPA cannot be installed directly. Device installation needs an
 Apple Developer account, a suitable certificate and provisioning profile.
-The [build and validation guide](../ios/README.md#validation-status) binds cloud
-builds and artifacts to their exact iOS source revision. Later source changes
-need their own SDK, UIKit and package validation.
+Cloud builds and artifacts apply only to the source commit recorded by each
+run. See [build records and pending validation](../ios/README.md#validation-status)
+for the earlier successful build and the SDK, UIKit and package checks still
+needed for later source changes.
 
 ## Host integration reference
 

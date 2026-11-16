@@ -4,7 +4,7 @@
 
 ## 获取构建产物
 
-[Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml)使用 GitHub 标准 `macos-26` runner、Xcode 26.6 和 XcodeGen 2.46.0，以 jobs=2 运行 ArgoMobileKit Core 测试、生成工程、执行 Release iPhoneOS archive 并打包 unsigned IPA，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。Core 测试失败会中止后续构建，其日志、archive 与测试日志一并上传。定义见 [.github/workflows/ios-unsigned.yml](../.github/workflows/ios-unsigned.yml)。本机没有完整 Xcode 时，可使用这条云构建路线。
+[Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml)配置为使用 GitHub 标准 `macos-26` runner、Xcode 26.6 和 XcodeGen 2.46.0，以 jobs=2 运行 ArgoMobileKit Core 测试、生成工程、执行 Release iPhoneOS archive 并打包 unsigned IPA，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。Core 测试失败会中止后续构建，其日志、archive 与测试日志一并上传。定义见 [.github/workflows/ios-unsigned.yml](../.github/workflows/ios-unsigned.yml)。云构建运行在 GitHub 托管的 Mac 上，无需自备 Mac 或安装本地 Xcode。
 
 在 [Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 中选择所需提交对应的成功运行。进入 Artifacts，查看 `Argo-iOS-unsigned-…`，其中包含 unsigned IPA、archive 和日志；当前工作流产物保留 3 天。
 
@@ -46,7 +46,7 @@ xcodebuild -jobs 2 \
 | 队列与早先记录 | 支持队列预览、按原消息读取全文和早先交接记录；结果未知时保留回执，不自动重发 |
 | 手机提醒 | 支持已配对设备的通知注册，并配置主机自己的 APNs |
 
-当前已核对的后端候选为 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44) 的 `6d189c72eacdc2688c8fa788b2c6af13e2d38201`。它仍是候选，最终发布前需记录最终已验证的主机来源。运行服务尚未部署此候选；部署后的真实配对、回复和 APNs 仍待验收。iOS 源码候选见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。
+后端源码变更见 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44)，iOS 源码变更见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。配对与回复需在实际部署的主机上验收；启用手机提醒时还需验收 APNs。
 
 旧主机需升级到具备这些能力的版本。完整能力说明与开发者接口约定见[主机兼容说明](../docs/COMPATIBILITY.md)，队列接口见[queue wire v2](../research/queue-wire-v2/queue-wire-v2.md)。
 
@@ -72,11 +72,11 @@ python3 ios/scripts/check_project.py
 XcodeGen 一致性检查为在 `ios/` 中运行 `./scripts/generate.sh --check`，要求使用同一生成器版本。
 
 <a id="validation-status"></a>
-## 当前验收状态
+## 构建记录与待验范围
 
-云构建先执行现有 Core 测试，再生成 Xcode 工程并运行 Release iPhoneOS archive 和 IPA 打包，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。扫码、全页编辑、Return 发送、主动 PasteButton、会话与通知代码均参与完整 App 编译；每次结果绑定对应提交，以 Actions 检查、产物和日志为准。
+每次构建结果和产物仅适用于 Actions 运行记录中的源码提交。下载前请核对源码 SHA，并查看该次运行的检查结果和日志。
 
-已有成功云构建 [43859719631](https://github.com/xiayuqin152/argo-ios/actions/runs/43859719631) 仅对应 iOS 源码 `3d38c9afecc362a1bf549984c9448bfc83e18c1c`。后续源码变更的 SDK 构建、原生 UIKit 测试、归档和 IPA 验包待对应提交的新云结果；下载时请核对运行记录中的源码 SHA。
+已有成功云构建 [43859719631](https://github.com/xiayuqin152/argo-ios/actions/runs/43859719631) 仅对应 iOS 源码 `3d38c9afecc362a1bf549984c9448bfc83e18c1c`。后续源码变更的 SDK 构建、原生 UIKit 测试、归档和 IPA 验包仍待对应提交的新云结果。
 
 真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。
 

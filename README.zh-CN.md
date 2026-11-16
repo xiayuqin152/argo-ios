@@ -28,7 +28,7 @@ argo pair
 
 在 App 中扫描二维码、点击**粘贴配对码**，或手动输入完整的 `argo1:` 码。配对码有效期为 10 分钟，只能使用一次。扫码需相机权限和受支持设备；粘贴与手动输入持续可用。手机须能访问该主机，连接局域网时按提示允许本地网络访问。
 
-主机需支持手机会话读取、消息回执和队列全文；手机提醒另需通知注册及主机的 APNs 配置。已核对的后端候选及具体能力见[主机兼容要求](ios/README.md#host-compatibility)，后端变更见 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44)。目前尚未指定已发布的最低主机版本。
+主机需支持手机会话读取、消息回执和队列全文；手机提醒另需通知注册及主机的 APNs 配置。具体能力要求见[主机兼容要求](ios/README.md#host-compatibility)，后端源码变更见 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44)。目前尚未指定已发布的最低主机版本。
 
 ## 手机提醒
 
@@ -38,9 +38,9 @@ argo pair
 
 ## 构建与安装
 
-App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodeproj) 的 `Argo` scheme。[GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 使用所选 Xcode 执行 Core 测试、生成 Release iPhoneOS archive 和 unsigned IPA，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。本机没有完整 Xcode 时，可使用这条云构建路线；进入成功运行可查看对应提交、产物和日志。
+App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodeproj) 的 `Argo` scheme。[GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 配置为使用所选 Xcode 执行 Core 测试、生成 Release iPhoneOS archive 和 unsigned IPA，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。云构建运行在 GitHub 托管的 Mac 上，无需自备 Mac 或安装本地 Xcode。构建结果仅适用于运行记录中的源码提交，见[构建记录与待验范围](ios/README.md#validation-status)。
 
-工作流产生的 **unsigned IPA 不能直接安装**。真机安装需要 Apple Developer 账号、适用证书和描述文件；当前未配置已签名 IPA、TestFlight 或 App Store 渠道。构建入口和验收状态见[构建说明](ios/README.md)。
+工作流产生的 **unsigned IPA 不能直接安装**。真机安装需要 Apple Developer 账号、适用证书和描述文件；当前未配置已签名 IPA、TestFlight 或 App Store 渠道。构建与安装入口见[构建说明](ios/README.md)。
 
 ## 来源与许可
 

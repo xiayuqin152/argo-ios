@@ -28,7 +28,7 @@ argo pair
 
 In the app, scan its QR code, tap **Paste Pairing Code**, or enter the complete `argo1:` code. A code is single-use and expires after 10 minutes. Scanning needs camera permission and a supported device; paste and manual entry remain available. Allow local-network access when prompted, and make sure the phone can reach the host.
 
-Use an Argo host that supports mobile conversation reads, message receipts and full queue-message reads. Phone alerts additionally require notification registration and the host's APNs setup. See the [host requirements and checked backend candidate](ios/README.md#host-compatibility); backend changes are tracked in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). A minimum released host version has not been specified.
+Use an Argo host that supports mobile conversation reads, message receipts and full queue-message reads. Phone alerts additionally require notification registration and the host's APNs setup. See the [host capability requirements](ios/README.md#host-compatibility); host source changes are tracked in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). A minimum released host version has not been specified.
 
 ## Phone alerts
 
@@ -38,9 +38,9 @@ Signing, actual APNs delivery and background receipt on a device await validatio
 
 ## Build and installation
 
-The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) runs Core tests with the selected Xcode, creates a Release iPhoneOS archive and unsigned IPA, then runs native UIKit input tests on an available iOS Simulator. It preserves the archive and UIKit test xcresult bundles. Use this cloud workflow if you do not have Xcode locally; open a successful run for its commit, artifacts and logs.
+The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) is configured to run Core tests with the selected Xcode, create a Release iPhoneOS archive and unsigned IPA, then run native UIKit input tests on an available iOS Simulator. It preserves the archive and UIKit test xcresult bundles. Builds run on GitHub-hosted Macs; you do not need your own Mac or a local Xcode installation. Results apply only to the source commit recorded by each run; see [build records and pending validation](ios/README.md#validation-status).
 
-The workflow's **unsigned IPA cannot be installed directly**. Device installation requires an Apple Developer account, a suitable certificate and provisioning profile. Signed IPA, TestFlight and App Store distribution are not configured. See [build instructions and current validation](ios/README.md).
+The workflow's **unsigned IPA cannot be installed directly**. Device installation requires an Apple Developer account, a suitable certificate and provisioning profile. Signed IPA, TestFlight and App Store distribution are not configured. See [build and installation instructions](ios/README.md).
 
 ## Credits and licenses
 
