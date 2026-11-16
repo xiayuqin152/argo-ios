@@ -27,11 +27,23 @@ final class PhoneNotifications {
     @ObservationIgnored private var pairingHosts: [UUID: Int] = [:]
     private static let enabledKey = "argo.push.enabledHosts.v1"
     private static let registrationsKey = "argo.push.registrations.v1"
+    private static let registrationOwnerKey = "argo.push.registrationOwner.v1"
+
+    // This saved APNs address only identifies the owner of persisted receipts.
+    // Registration always waits for Apple's current-launch token callback.
+    private struct RegistrationOwner: Codable, Equatable {
+        let token: String
+        let environment: String
+        let topic: String
+    }
+    @ObservationIgnored private var registrationOwner: RegistrationOwner?
 
     private init() {
         enabledHosts = Set((UserDefaults.standard.stringArray(forKey: Self.enabledKey) ?? []).compactMap(UUID.init))
         registrations = UserDefaults.standard.data(forKey: Self.registrationsKey)
             .flatMap { try? JSONDecoder().decode([UUID: ArgoPushRegistration].self, from: $0) } ?? [:]
+        registrationOwner = UserDefaults.standard.data(forKey: Self.registrationOwnerKey)
+            .flatMap { try? JSONDecoder().decode(RegistrationOwner.self, from: $0) }
     }
 
     func attach(store: ArgoHostStore, makeConnection: @escaping AppModel.ConnectionFactory) {
@@ -183,6 +195,16 @@ final class PhoneNotifications {
               ["sandbox", "production"].contains(environment), let topic = Bundle.main.bundleIdentifier else {
             throw ArgoClientError.refusedLocally(.message("The signed app needs an explicit APNs environment and bundle topic."))
         }
+        let owner = RegistrationOwner(token: token, environment: environment, topic: topic)
+        if registrationOwner != owner {
+            // A PUT may rotate the host's registration even when its reply is
+            // lost. Retire the previous owner before starting that request,
+            // including the first token callback after a process restart.
+            for receipt in registrations.values { clearNotifications(receipt) }
+            registrations.removeAll()
+            registrationOwner = owner
+            save()
+        }
         let currentHosts = try await store.hosts()
         hosts = currentHosts
         synchronizationProblem = nil
@@ -244,6 +266,10 @@ final class PhoneNotifications {
     private func save() {
         UserDefaults.standard.set(enabledHosts.map(\.uuidString), forKey: Self.enabledKey)
         if let data = try? JSONEncoder().encode(registrations) { UserDefaults.standard.set(data, forKey: Self.registrationsKey) }
+        // Persist retired receipts before their new owner.
+        if let registrationOwner, let data = try? JSONEncoder().encode(registrationOwner) {
+            UserDefaults.standard.set(data, forKey: Self.registrationOwnerKey)
+        }
     }
 
     private func clearNotifications(_ registration: ArgoPushRegistration?) {
