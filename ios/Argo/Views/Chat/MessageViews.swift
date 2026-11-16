@@ -131,6 +131,9 @@ struct PendingBubble: View {
                     Text(verbatim: problem).font(Theme.Font.caption).foregroundStyle(.secondary)
                         .readingContent()
                 }
+                if !message.receiptTruncatedFields.isEmpty || !message.receiptItemTruncatedFields.isEmpty {
+                    Text("Queue details are a shortened preview.").font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
                 if case .native(let native) = message.status, case .message(let original) = message.operation {
                     NativeHandoffDetails(native: native, target: original.target, currentIdentity: currentIdentity)
                 }

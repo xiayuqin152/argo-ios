@@ -70,6 +70,36 @@ struct PendingDelivery: Identifiable {
     var duplicate = false
     /// Server-owned identity for later queue reads; text is never a receipt key.
     var queueItemID: String?
+    var receiptTruncatedFields: [String] = []
+    var receiptItemTruncatedFields: [String] = []
+}
+
+/// One visible full-item read. It owns no send/edit action and is discarded
+/// with its row or presentation, including when an identical row is refreshed.
+@MainActor @Observable
+final class QueueItemRead: Identifiable {
+    let id = UUID()
+    let key: SessionKey
+    let source: ArgoQueuedMessage
+    let displayed: ArgoQueuedMessage
+    let identity: ArgoAgentIdentity?
+    let chatIdentity: ArgoAgentIdentity?
+    let queueState: String
+    let ended: Bool
+    let later: Bool
+    let copyWhenLoaded: Bool
+    var item: ArgoQueuedMessage?
+    var problem: String?
+    @ObservationIgnored var task: Task<Void, Never>?
+
+    init(key: SessionKey, source: ArgoQueuedMessage, displayed: ArgoQueuedMessage, queue: ArgoQueue,
+         chatIdentity: ArgoAgentIdentity?, copy: Bool) {
+        self.key = key; self.source = source; self.displayed = displayed
+        identity = queue.identity; self.chatIdentity = chatIdentity
+        queueState = queue.state; ended = queue.ended
+        later = queue.later.contains { $0.id == source.id }
+        copyWhenLoaded = copy
+    }
 }
 
 enum InterruptStatus: Equatable {
@@ -113,8 +143,9 @@ final class ConversationState {
     var transcript = ChatTranscript()
     var team: ArgoTeamView?
     var queue: ArgoQueue? {
-        didSet { reconcileQueueReceipts() }
+        didSet { closeQueueItem(); reconcileQueueReceipts() }
     }
+    var queueItemRead: QueueItemRead?
     var deliveries: [PendingDelivery] = []
     /// Session-owned evidence may arrive before POST binds its server item ID.
     private var queueEvidence: [String: ArgoQueuedMessage] = [:]
@@ -251,6 +282,8 @@ final class ConversationState {
     func record(_ receipt: ArgoSendReceipt, for id: String) {
         guard let index = deliveries.firstIndex(where: { $0.id == id }) else { return }
         deliveries[index].queueItemID = receipt.queued?.id
+        deliveries[index].receiptTruncatedFields = receipt.truncatedFields
+        deliveries[index].receiptItemTruncatedFields = receipt.queued?.truncatedFields ?? []
         if let item = receipt.queued, hiddenNativeIDs.contains(item.id) {
             deliveries.remove(at: index)
             return // A late POST must not restore an explicitly hidden record.
@@ -288,9 +321,10 @@ final class ConversationState {
 
     private func reconcileQueueReceipts() {
         guard let queue, queue.run == key.run else { return }
-        for item in queue.items { rememberQueueEvidence(item) }
+        for item in queue.items + queue.later { rememberQueueEvidence(item) }
         for index in deliveries.indices {
             guard let id = deliveries[index].queueItemID else { continue }
+            if let evidence = queueEvidence[id] { deliveries[index].receiptItemTruncatedFields = evidence.truncatedFields }
             if let native = queueEvidence[id]?.native {
                 deliveries[index].status = .native(native)
             } else if let item = queueEvidence[id], !item.deliveryUnknown.isEmpty {
@@ -315,20 +349,21 @@ final class ConversationState {
         return evidence.native == nil ? nil : evidence
     }
 
-    var nativeQueueItems: [ArgoQueuedMessage] { queue?.items.compactMap { nativeRecord(for: $0) } ?? [] }
+    var allQueueItems: [ArgoQueuedMessage] { (queue?.items ?? []) + (queue?.later ?? []) }
+    var nativeQueueItems: [ArgoQueuedMessage] { allQueueItems.compactMap { nativeRecord(for: $0) } }
     var ordinaryQueueItems: [ArgoQueuedMessage] {
-        queue?.items.filter { !hiddenNativeIDs.contains($0.id) && nativeRecord(for: $0) == nil } ?? []
+        allQueueItems.filter { !hiddenNativeIDs.contains($0.id) && nativeRecord(for: $0) == nil }
     }
     var pendingQueueCount: Int {
         guard let queue else { return 0 }
         guard let pending = queue.pending else { return ordinaryQueueItems.count }
         // A late ordinary snapshot cannot make a known native record sendable.
-        let stale = queue.items.filter { $0.native == nil && (queueEvidence[$0.id]?.native != nil || hiddenNativeIDs.contains($0.id)) }.count
+        let stale = allQueueItems.filter { $0.native == nil && (queueEvidence[$0.id]?.native != nil || hiddenNativeIDs.contains($0.id)) }.count
         return max(0, pending - stale)
     }
     var nativeHistoryCount: Int {
         guard let queue else { return 0 }
-        let hidden = queue.items.filter { $0.native != nil && hiddenNativeIDs.contains($0.id) }.count
+        let hidden = allQueueItems.filter { $0.native != nil && hiddenNativeIDs.contains($0.id) }.count
         return max(nativeQueueItems.count, queue.nativeHistory - hidden)
     }
     var deliveryReceipts: [PendingDelivery] {
@@ -337,9 +372,15 @@ final class ConversationState {
     }
 
     func didHideNativeRecord(_ id: String) {
+        if queueItemRead?.source.id == id { closeQueueItem() }
         hiddenNativeIDs.insert(id)
         queueEvidence[id] = nil
         deliveries.removeAll { $0.queueItemID == id }
+    }
+
+    func closeQueueItem() {
+        queueItemRead?.task?.cancel()
+        queueItemRead = nil
     }
 
     private func trimSuccessfulDeliveries() {

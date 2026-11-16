@@ -385,3 +385,17 @@
 "Native records: %lld" = "Native records: %lld";
 "Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged." = "Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged.";
 "The handoff record has no identifier. Refresh the conversation." = "The handoff record has no identifier. Refresh the conversation.";
+
+/* Queue preview and full reads */
+"Queue details are a shortened preview." = "Queue details are a shortened preview.";
+"Shortened preview — original content remains on the host." = "Shortened preview — original content remains on the host.";
+"Copy Full Message" = "Copy Full Message";
+"View Full Message" = "View Full Message";
+"Full Message" = "Full Message";
+"Loading Full Message…" = "Loading Full Message…";
+"The complete message could not be loaded. The queue record is unchanged." = "The complete message could not be loaded. The queue record is unchanged.";
+"The queue item has no identifier. Refresh the conversation." = "The queue item has no identifier. Refresh the conversation.";
+"The queue item changed. Refresh the conversation." = "The queue item changed. Refresh the conversation.";
+"The host returned an incomplete full message." = "The host returned an incomplete full message.";
+"The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version." = "The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version.";
+"Copied" = "Copied";

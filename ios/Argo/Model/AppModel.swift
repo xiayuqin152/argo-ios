@@ -369,9 +369,67 @@ final class AppModel {
     }
 
     func refreshConversation() {
+        conversation?.closeQueueItem()
         if let state = conversation, !state.followingLatest, state.transcript.identity != nil {
             readWindow(.around(state.transcript.start), followingLatest: false)
         } else { startConversationPolling() }
+    }
+
+    func openQueueItem(_ item: ArgoQueuedMessage, for key: SessionKey, copy: Bool = false) {
+        guard active, conversationVisible, selectedKey == key, let state = conversations[key], let queue = state.queue,
+              let source = state.allQueueItems.first(where: { $0.id == item.id }),
+              (state.nativeRecord(for: source) ?? source) == item else { return }
+        state.closeQueueItem()
+        let read = QueueItemRead(key: key, source: source, displayed: item, queue: queue,
+                                 chatIdentity: state.transcript.identity, copy: copy)
+        state.queueItemRead = read
+        let fields = copy ? ["text"] : ["text", "native.note", "deliveryUnknown"]
+        if fields.allSatisfy(item.isComplete) { read.item = item; return }
+        guard status.isConnected, let connection, connection.host.id == key.host,
+              queue.run == key.run, queue.ws == key.workspace, let identity = queue.identity, identity.run == key.run else {
+            read.problem = L10n.text("The queue item changed. Refresh the conversation.")
+            return
+        }
+        let epoch = hostEpoch
+        read.task = Task { [weak self, weak read] in
+            guard let self, let read else { return }
+            defer { read.task = nil }
+            do {
+                let full = try await connection.queueItem(run: key.run, itemID: source.id)
+                try Task.checkCancellation()
+                guard isCurrentHost(epoch), self.connection === connection else { return }
+                guard queueReadIsCurrent(read) else { closeQueueItem(read); return }
+                // The displayed row may carry an accepted ACK stronger than
+                // the raw queue's old ordinary/unknown snapshot.
+                guard full.ws == key.workspace, full.identity == identity, full.state == read.queueState,
+                      full.ended == read.ended, full.later == read.later, read.displayed.matchesFullItem(full.item) else {
+                    throw ArgoClientError.invalidResponse(.message("The queue item changed. Refresh the conversation."))
+                }
+                read.item = full.item
+            } catch {
+                guard !Task.isCancelled, isCurrentHost(epoch) else { return }
+                guard queueReadIsCurrent(read) else { closeQueueItem(read); return }
+                read.problem = L10n.error(error)
+            }
+        }
+    }
+
+    private func queueReadIsCurrent(_ read: QueueItemRead) -> Bool {
+        guard active, conversationVisible, selectedKey == read.key, let state = conversations[read.key],
+              state.queueItemRead === read, state.transcript.identity == read.chatIdentity,
+              state.queue?.identity == read.identity,
+              let row = state.allQueueItems.first(where: { $0.id == read.source.id }) else { return false }
+        return row == read.source && (state.nativeRecord(for: row) ?? row) == read.displayed
+    }
+
+    func queueItemText(_ read: QueueItemRead) -> String? {
+        guard queueReadIsCurrent(read), let item = read.item, item.isComplete("text") else { return nil }
+        return item.text
+    }
+
+    func closeQueueItem(_ read: QueueItemRead) {
+        guard let state = conversations[read.key], state.queueItemRead === read else { return }
+        state.closeQueueItem()
     }
 
     /// This removes only the selected Argo status record, including records
@@ -1346,6 +1404,7 @@ final class AppModel {
     }
 
     private func cancelConversationRequests() {
+        conversation?.closeQueueItem()
         chatEpoch = UUID()
         chatTask?.cancel()
         historyTask?.cancel()

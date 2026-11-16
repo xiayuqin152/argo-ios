@@ -42,8 +42,13 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     func markQueueUnknown() { unknown = true; if native.isEmpty { native.append(text) } }
     func deliverQueued() { if pending { native.append(text); pending = false } }
     private func json(_ value: Any, status: Int = 200) throws -> HTTPResponse {
-        HTTPResponse(status: status, headers: [("Content-Type", "application/json")],
-                     body: try JSONSerialization.data(withJSONObject: value), reusable: true)
+        var payload = value
+        if var object = value as? [String: Any], object["queue"] != nil || (object["items"] != nil && object["hold"] != nil) {
+            object["bounded"] = true; object["byteLimit"] = 8_388_608
+            payload = object
+        }
+        return HTTPResponse(status: status, headers: [("Content-Type", "application/json")],
+                            body: try JSONSerialization.data(withJSONObject: payload), reusable: true)
     }
     private func item() -> [String: Any] {
         var value: [String: Any] = ["id": "fixture-item", "text": text, "submit": true, "source": "ios", "created": "2026-11-16T03:20:00Z"]

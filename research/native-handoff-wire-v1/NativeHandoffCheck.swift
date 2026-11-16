@@ -76,8 +76,13 @@ private actor NativeTransport: ArgoHTTPTransport {
                 "pending": run == "r1" ? pendingCount : 0, "nativeHistory": run == "r1" ? historyCount : 0]
     }
     private func json(_ object: Any, status: Int = 200) throws -> HTTPResponse {
-        HTTPResponse(status: status, headers: [("Content-Type", "application/json")],
-                     body: try JSONSerialization.data(withJSONObject: object), reusable: true)
+        var payload = object
+        if var object = object as? [String: Any], object["queue"] != nil || (object["items"] != nil && object["hold"] != nil) {
+            object["bounded"] = true; object["byteLimit"] = 8_388_608
+            payload = object
+        }
+        return HTTPResponse(status: status, headers: [("Content-Type", "application/json")],
+                            body: try JSONSerialization.data(withJSONObject: payload), reusable: true)
     }
     func send(_ request: HTTPRequest, reuse: Bool, timeout: TimeInterval?) async throws -> HTTPResponse {
         let url = URLComponents(string: "http://fixture.invalid" + request.target)!

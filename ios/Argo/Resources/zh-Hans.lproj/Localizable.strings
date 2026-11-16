@@ -385,3 +385,17 @@
 "Native records: %lld" = "交接记录：%lld";
 "Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged." = "隐藏操作尚未确认。请刷新记录后再试；Codex 中的输入不受影响。";
 "The handoff record has no identifier. Refresh the conversation." = "交接记录缺少标识，请刷新会话。";
+
+/* Queue preview and full reads */
+"Queue details are a shortened preview." = "队列详情为截断预览。";
+"Shortened preview — original content remains on the host." = "这是截断预览，完整内容仍保存在主机上。";
+"Copy Full Message" = "复制完整消息";
+"View Full Message" = "查看完整消息";
+"Full Message" = "完整消息";
+"Loading Full Message…" = "正在读取完整消息…";
+"The complete message could not be loaded. The queue record is unchanged." = "无法读取完整消息，队列记录保持不变。";
+"The queue item has no identifier. Refresh the conversation." = "队列记录缺少标识，请刷新会话。";
+"The queue item changed. Refresh the conversation." = "队列记录已变化，请刷新会话。";
+"The host returned an incomplete full message." = "主机返回的全文仍不完整。";
+"The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version." = "主机未返回有界队列预览，请刷新会话并检查主机 Argo 版本。";
+"Copied" = "已复制";

@@ -23,6 +23,7 @@ struct ChatView: View {
     @State private var preview: AttachmentPreview?
     @State private var inputOwner: ComposerInputOwner?
     @State private var nativeToHide: (item: ArgoQueuedMessage, key: SessionKey)?
+    @State private var queuePresentation = SeenPresentation()
 
     private var attachPresentation: SeenPresentation { attachPanel.presentation }
 
@@ -212,6 +213,11 @@ struct ChatView: View {
             }, onCancellation: { filesPresentation.setPresented(false, in: model) })
         }
         .sheet(item: $preview, onDismiss: { previewPresentation.didDismiss(in: model) }) { AttachmentViewer(preview: $0) }
+        .sheet(item: Binding(get: { state.queueItemRead }, set: { value in
+            if value == nil, let read = state.queueItemRead { model.closeQueueItem(read) }
+        }), onDismiss: { queuePresentation.didDismiss(in: model) }) { read in
+            QueueFullMessageView(read: read)
+        }
         .environment(\.openURL, OpenURLAction { url in
             openMessageURL(url, item: nil, key: fileKey, identity: fileIdentity)
         })
@@ -362,6 +368,7 @@ struct ChatView: View {
         if let queue = state.queue, state.pendingQueueCount > 0 || !state.ordinaryQueueItems.isEmpty {
             DisclosureGroup {
                 if !queue.hold.isEmpty { Text(verbatim: queue.hold).font(Theme.Font.caption).foregroundStyle(.secondary) }
+                if !queue.truncatedFields.isEmpty { Text("Queue details are a shortened preview.").font(Theme.Font.caption).foregroundStyle(.secondary) }
                 ForEach(state.ordinaryQueueItems) { item in
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         if let reason = state.deliveryUnknown(for: item) {
@@ -370,7 +377,7 @@ struct ChatView: View {
                             Text(verbatim: reason).font(Theme.Font.caption).foregroundStyle(.secondary)
                                 .readingContent()
                         }
-                        Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
+                        queueMessage(item)
                     }
                     .padding(.vertical, Theme.Space.xs)
                 }
@@ -395,9 +402,8 @@ struct ChatView: View {
                                   systemImage: native.state == .accepted ? "tray" : Theme.Icon.warning)
                                 .font(Theme.Font.captionStrong)
                             NativeHandoffDetails(native: native, target: item.target, currentIdentity: state.transcript.identity)
-                            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
+                            queueMessage(item)
                             HStack(spacing: Theme.Space.l) {
-                                CopyMessageButton(text: item.text).tapTargetHeight()
                                 Button("Hide Record") { nativeToHide = (item, state.key) }
                                     .disabled(state.hidingNativeIDs.contains(item.id) || !model.status.isConnected)
                                     .tapTargetHeight()
@@ -418,6 +424,77 @@ struct ChatView: View {
             }
             .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+        }
+    }
+
+    @ViewBuilder private func queueMessage(_ item: ArgoQueuedMessage) -> some View {
+        if item.isIncomplete {
+            Text("Shortened preview — original content remains on the host.")
+                .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+        }
+        if item.isComplete("text") {
+            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
+        } else {
+            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent()
+        }
+        HStack(spacing: Theme.Space.l) {
+            if item.isComplete("text") { CopyMessageButton(text: item.text).tapTargetHeight() }
+            else { Button("Copy Full Message") { openQueueItem(item, copy: true) }.disabled(!model.status.isConnected).tapTargetHeight() }
+            if item.isIncomplete {
+                Button("View Full Message") { openQueueItem(item, copy: false) }.disabled(!model.status.isConnected).tapTargetHeight()
+            }
+        }
+        .font(Theme.Font.captionStrong)
+    }
+
+    private func openQueueItem(_ item: ArgoQueuedMessage, copy: Bool) {
+        guard queuePresentation.owner == nil else { return }
+        model.openQueueItem(item, for: state.key, copy: copy)
+        if state.queueItemRead != nil { queuePresentation.cover(in: model, conversation: state.key) }
+    }
+}
+
+private struct QueueFullMessageView: View {
+    @Bindable var read: QueueItemRead
+    @Environment(AppModel.self) private var model
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    if let problem = read.problem {
+                        Text("The complete message could not be loaded. The queue record is unchanged.").font(Theme.Font.captionStrong)
+                        Text(verbatim: problem).readingContent()
+                    } else if let item = read.item {
+                        if item.isIncomplete {
+                            Text("Queue details are a shortened preview.").font(Theme.Font.caption).foregroundStyle(.secondary)
+                        }
+                        if let native = item.native {
+                            NativeHandoffDetails(native: native, target: item.target, currentIdentity: read.identity)
+                        } else {
+                            Text("Original Conversation").font(Theme.Font.captionStrong)
+                            Text(verbatim: [read.key.workspace, read.key.run, item.target?.session ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"))
+                                .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                        }
+                        Text(verbatim: item.text).readingContent().textSelection(.enabled)
+                        if !item.deliveryUnknown.isEmpty { Text(verbatim: item.deliveryUnknown).readingContent() }
+                        Button {
+                            if let text = model.queueItemText(read) { UIPasteboard.general.string = text; copied = true }
+                        } label: { Label("Copy", systemImage: Theme.Icon.copy) }
+                        .tapTargetHeight()
+                        if copied { Text("Copied").font(Theme.Font.caption).foregroundStyle(.secondary) }
+                    } else { ProgressView("Loading Full Message…") }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.Space.m)
+            }
+            .navigationTitle("Full Message")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.closeQueueItem(read) } } }
+        }
+        .onChange(of: read.item, initial: true) { _, _ in
+            guard read.copyWhenLoaded, !copied, let text = model.queueItemText(read) else { return }
+            UIPasteboard.general.string = text
+            copied = true
         }
     }
 }

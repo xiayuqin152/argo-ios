@@ -13,6 +13,7 @@ Argo's companion for iPhone and iPad: follow your coding sessions, read progress
 - Browse paired hosts, workspaces, messages, tool activity and conversation history.
 - Read and reply to connected **managed** sessions, including supported Agent questions. Historical, manual or unattached sessions are read only.
 - See working, waiting, finished and error states. Sending shows the host's delivery or queue receipt; refresh to check an unknown result before sending again.
+- Queue previews and full-message reads require an Argo host upgraded to the [bounded queue and full-item contract](research/queue-wire-v2/queue-wire-v2.md).
 - Expand the message field for long text. Return inserts a line break by default; **Settings → Return Key Sends** enables Return to send, with Shift-Return for a line break.
 - Attach photos or files and open managed previews. The system **Paste Image** button imports images when you tap it.
 

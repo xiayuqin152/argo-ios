@@ -205,7 +205,7 @@ final class ArgoConnectionTests: XCTestCase {
         XCTAssertFalse(sent.reuse, "writes always get a fresh stream")
         XCTAssertNil(sent.timeout, "ordinary sends keep the transport default")
         XCTAssertEqual(sent.request.method, "POST")
-        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue")
+        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue?bounded=1")
         XCTAssertEqual(sent.request.header("X-Loom-Attempt"), "ios-attempt-0001")
         XCTAssertEqual(sent.request.header("Content-Type"), "application/json")
         let body = sent.request.json
@@ -230,7 +230,7 @@ final class ArgoConnectionTests: XCTestCase {
         let item = #"{"id":"m1","text":"继续","source":"ios","deliveryUnknown":"native acknowledgement lost"}"#
         let queue = "{\"run\":\"\(run)\",\"state\":\"working\",\"hold\":\"投递结果未知\",\"items\":[\(item)]}"
         let t = FakeTransport { request in
-            .json(200, request.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue)
+            .queuePreview(200, request.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue)
         }
         let c = connection(t)
         let receipt = try await c.send(ArgoOutgoingMessage(run: run, text: "继续", target: nil))
@@ -248,7 +248,7 @@ final class ArgoConnectionTests: XCTestCase {
         for state in ["accepted", "unknown", "future-state"] {
             let item = "{\"id\":\"native-1\",\"text\":\"original input\",\"target\":{\"run\":\"\(run)\",\"engine\":\"codex\",\"session\":\"original-thread\"},\"native\":{\"state\":\"\(state)\",\"note\":\"original note\"}}"
             let queue = "{\"run\":\"\(run)\",\"items\":[\(item)],\"pending\":0,\"nativeHistory\":1}"
-            let t = FakeTransport { req in .json(200, req.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue) }
+            let t = FakeTransport { req in .queuePreview(200, req.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue) }
             let c = connection(t)
             let receipt = try await c.send(ArgoOutgoingMessage(run: run, text: "original input", target: ArgoAgentIdentity(run: run, engine: "codex", session: "original-thread")))
             XCTAssertFalse(receipt.delivered)
@@ -272,7 +272,7 @@ final class ArgoConnectionTests: XCTestCase {
         try await c.hideNativeHandoff(run: run, itemID: "native/a b")
         let sent = try XCTUnwrap(t.requests.first)
         XCTAssertEqual(sent.request.method, "DELETE")
-        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue/native%2Fa%20b/native")
+        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue/native%2Fa%20b/native?bounded=1")
         XCTAssertNil(sent.request.body)
         XCTAssertNil(sent.request.header("X-Loom-Attempt"))
         XCTAssertFalse(sent.reuse)
@@ -289,7 +289,7 @@ final class ArgoConnectionTests: XCTestCase {
 
     func testDuplicateUnknownReceiptRemainsUnknown() async throws {
         let result = #"{"delivered":false,"item":{"id":"m1","deliveryUnknown":"lost acknowledgement"},"queue":{"items":[]}}"#
-        let t = FakeTransport { _ in .json(200, result, headers: [("X-Loom-Duplicate", "1")]) }
+        let t = FakeTransport { _ in .queuePreview(200, result, headers: [("X-Loom-Duplicate", "1")]) }
         let receipt = try await connection(t).send(ArgoOutgoingMessage(run: run, text: "x", target: nil, attempt: "ios-again-001"))
         XCTAssertFalse(receipt.delivered)
         XCTAssertTrue(receipt.duplicate)

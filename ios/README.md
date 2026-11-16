@@ -43,9 +43,12 @@ xcodebuild -jobs 2 \
 | 网关与接口 | gateway proto=1、HTTP api=1 |
 | 会话阅读 | 客户端请求 `GET /api/terminals/{id}/chat?bounded=1`；响应必须声明 `bounded: true` 和 `byteLimit: 1048576`，支持 `recordOffset:blockIndex` 形式的 before/after/around 游标及 fileRefs |
 | 会话回复 | 当前已接通的 managed 会话具有可写身份和主机回执；历史、manual 或未接入会话只读 |
+| 队列预览与全文 | 新版客户端需要升级 Argo 后端以支持[queue wire v2](../research/queue-wire-v2/queue-wire-v2.md)：队列读取与发送回执请求 `bounded=1`，响应声明 `bounded: true` 和 `byteLimit: 8388608`；按原 item ID 读取 `GET /api/agents/{run}/queue/{id}` 获得完整原文 |
 | 手机提醒 | 主机提供以已配对设备凭证认证的 `PUT/DELETE /api/notify/device`，并配置自己的 APNs |
 
 最新 fetch 核对的 Argo 源码主线为 `56b03830908811c8cc1675675bbdd59127303b5f`，已包含独立审查通过的后端组合 `eba473a09100b11b2f6ea0cf77ab5817f50f6608`。两者源码树一致，包含上述聊天、配对与通知能力。
+
+上述旧主线核对记录不包含新版队列契约。队列预览与全文需要相应后端升级；目前没有指定包含该能力的已发布最低版本。
 
 运行服务尚未部署此源码，也尚未指定已发布的最低主机版本号；部署后的真实配对、回复与 APNs 仍待验收。
 
