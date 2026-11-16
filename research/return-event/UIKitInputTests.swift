@@ -3,6 +3,13 @@ import UIKit
 import XCTest
 @testable import ReturnEventHost
 
+// Only public getters supply the synthetic result. The test first requires
+// UIKit to insert its newline before checking the enabled Return-send path.
+@MainActor private final class SyntheticLineBreakPhrase: UIDictationPhrase {
+    override var text: String { "\n" }
+    override var alternativeInterpretations: [String]? { ["\n", "\r\n"] }
+}
+
 /// Hosted iOS tests of the actual UIKit subclass. No network, clipboard or real
 /// messages. Calling the paste delegate checks the final native insertion step;
 /// end-to-end paste menus, item providers and physical IMEs remain device checks.
@@ -162,5 +169,79 @@ import XCTest
         XCTAssertLessThanOrEqual(view.bounds.height, ceil(expected.lineHeight * 6))
         XCTAssertGreaterThan(view.bounds.height, expected.lineHeight)
         XCTAssertEqual(view.selectedRange, NSRange(location: (view.text as NSString).length, length: 0))
+    }
+
+    func testExplicitDictationResultNewlineDoesNotSubmit() throws {
+        try withField { view in
+            view.sendsOnReturn = true
+            var sends = 0
+            view.submit = { _ in sends += 1 }
+            view.setDraft("seed")
+            view.selectedRange = NSRange(location: 4, length: 0)
+            view.insertText("\n")
+            XCTAssertEqual(sends, 1, "SETUP: direct Return must reach the enabled send branch")
+            guard sends == 1 else { return }
+            sends = 0
+
+            let input: any UITextInput = view
+            let insertResult = try XCTUnwrap(
+                input.insertDictationResult,
+                "SETUP: UITextView must implement the public dictation-result callback"
+            )
+            // Validate the payload through native editing before enabling the
+            // send interception. Keep UIKit's actual whitespace as the oracle.
+            view.sendsOnReturn = false
+            view.setDraft("seed")
+            view.selectedRange = NSRange(location: 4, length: 0)
+            insertResult([SyntheticLineBreakPhrase()])
+            let nativeText = try XCTUnwrap(view.text)
+            XCTAssertTrue(nativeText.hasPrefix("seed"), "SETUP: dictation must preserve the existing draft")
+            XCTAssertTrue(nativeText.contains("\n"), "SETUP: UIKit must actually insert the synthetic newline")
+            guard nativeText.hasPrefix("seed"), nativeText.contains("\n") else { return }
+
+            view.sendsOnReturn = true
+            view.setDraft("seed")
+            view.selectedRange = NSRange(location: 4, length: 0)
+            insertResult([SyntheticLineBreakPhrase()])
+            XCTAssertEqual(view.text, nativeText, "DICTATION: the result must remain native text with Return sends enabled")
+            XCTAssertEqual(sends, 0, "DICTATION: an explicit dictation result must not submit")
+        }
+    }
+
+    func testNativeUndoRedoOfNewlineDoesNotSubmit() throws {
+        try withField { view in
+            view.sendsOnReturn = true
+            var sends = 0
+            view.submit = { _ in sends += 1 }
+            view.setDraft("seed")
+            view.selectedRange = NSRange(location: 4, length: 0)
+            view.insertText("\n")
+            XCTAssertEqual(sends, 1, "SETUP: direct Return must reach the enabled send branch")
+            guard sends == 1 else { return }
+            sends = 0
+
+            let undo = try XCTUnwrap(view.undoManager, "SETUP: the focused native field needs an undo manager")
+            let groupsByEvent = undo.groupsByEvent
+            defer { undo.removeAllActions(); undo.groupsByEvent = groupsByEvent }
+            undo.removeAllActions()
+            undo.groupsByEvent = false
+            view.sendsOnReturn = false
+            undo.beginUndoGrouping()
+            view.insertText("\n")
+            undo.endUndoGrouping()
+            XCTAssertEqual(view.text, "seed\n", "SETUP: native insertion must produce a newline")
+            XCTAssertTrue(undo.canUndo, "SETUP: UIKit must register the edit without a custom undo handler")
+            guard view.text == "seed\n", undo.canUndo else { return }
+
+            view.sendsOnReturn = true
+            undo.undo()
+            XCTAssertEqual(view.text, "seed", "UNDO: the native newline edit must actually be reverted")
+            XCTAssertEqual(sends, 0, "UNDO: the native inverse edit must not submit")
+            XCTAssertTrue(undo.canRedo, "SETUP: native undo must make the edit available for redo")
+            guard view.text == "seed", undo.canRedo else { return }
+            undo.redo()
+            XCTAssertEqual(view.text, "seed\n", "REDO: the native newline edit must actually be restored")
+            XCTAssertEqual(sends, 0, "REDO: replaying the native edit must not submit")
+        }
     }
 }
