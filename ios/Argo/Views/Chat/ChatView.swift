@@ -350,12 +350,25 @@ struct ChatView: View {
             DisclosureGroup {
                 if !queue.hold.isEmpty { Text(verbatim: queue.hold).font(Theme.Font.caption).foregroundStyle(.secondary) }
                 ForEach(queue.items) { item in
-                    Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
-                        .padding(.vertical, Theme.Space.xs)
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        if let reason = state.deliveryUnknown(for: item) {
+                            Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
+                                .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
+                            Text(verbatim: reason).font(Theme.Font.caption).foregroundStyle(.secondary)
+                                .readingContent()
+                        }
+                        Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
+                    }
+                    .padding(.vertical, Theme.Space.xs)
                 }
             } label: {
-                Label("\(queue.items.count) messages queued on host", systemImage: Theme.Icon.time)
-                    .font(Theme.Font.captionStrong)
+                if queue.items.contains(where: { state.deliveryUnknown(for: $0) != nil }) {
+                    Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
+                        .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
+                } else {
+                    Label("\(queue.items.count) messages queued on host", systemImage: Theme.Icon.time)
+                        .font(Theme.Font.captionStrong)
+                }
             }
             .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))

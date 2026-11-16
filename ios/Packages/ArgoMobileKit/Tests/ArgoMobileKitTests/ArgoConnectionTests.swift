@@ -220,8 +220,38 @@ final class ArgoConnectionTests: XCTestCase {
         XCTAssertEqual(target["pid"] as? Int, 0)
         XCTAssertFalse(receipt.delivered)
         XCTAssertEqual(receipt.queued?.id, "m1")
+        XCTAssertEqual(receipt.queued?.deliveryUnknown, "")
         XCTAssertEqual(receipt.queue.hold, "Agent 正在工作")
         XCTAssertFalse(receipt.duplicate)
+    }
+
+    func testUnknownQueueItemSurvivesReceiptAndRefresh() async throws {
+        // backend 221c1a94: HTTP 200, no note; item carries the uncertain outcome.
+        let item = #"{"id":"m1","text":"继续","source":"ios","deliveryUnknown":"native acknowledgement lost"}"#
+        let queue = "{\"run\":\"\(run)\",\"state\":\"working\",\"hold\":\"投递结果未知\",\"items\":[\(item)]}"
+        let t = FakeTransport { request in
+            .json(200, request.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue)
+        }
+        let c = connection(t)
+        let receipt = try await c.send(ArgoOutgoingMessage(run: run, text: "继续", target: nil))
+        XCTAssertFalse(receipt.delivered)
+        XCTAssertFalse(receipt.pasted)
+        XCTAssertEqual(receipt.note, "")
+        XCTAssertEqual(receipt.queued?.deliveryUnknown, "native acknowledgement lost")
+        let fresh = try await c.queue(run: run)
+        XCTAssertEqual(fresh.items, receipt.queue.items)
+        XCTAssertEqual(fresh.items.first, receipt.queued)
+        XCTAssertEqual(t.requests.map(\.request.method), ["POST", "GET"])
+    }
+
+    func testDuplicateUnknownReceiptRemainsUnknown() async throws {
+        let result = #"{"delivered":false,"item":{"id":"m1","deliveryUnknown":"lost acknowledgement"},"queue":{"items":[]}}"#
+        let t = FakeTransport { _ in .json(200, result, headers: [("X-Loom-Duplicate", "1")]) }
+        let receipt = try await connection(t).send(ArgoOutgoingMessage(run: run, text: "x", target: nil, attempt: "ios-again-001"))
+        XCTAssertFalse(receipt.delivered)
+        XCTAssertTrue(receipt.duplicate)
+        XCTAssertEqual(receipt.queued?.deliveryUnknown, "lost acknowledgement")
+        XCTAssertEqual(t.requests.count, 1)
     }
 
     func testSendReportsDuplicateReplay() async throws {

@@ -67,6 +67,8 @@ struct PendingDelivery: Identifiable {
     let created = Date()
     var status: Status = .sending
     var duplicate = false
+    /// Server-owned identity for later queue reads; text is never a receipt key.
+    var queueItemID: String?
 }
 
 enum InterruptStatus: Equatable {
@@ -109,7 +111,9 @@ final class ConversationState {
     private(set) var answeredQuestions: [String: ArgoAsk] = [:]
     var transcript = ChatTranscript()
     var team: ArgoTeamView?
-    var queue: ArgoQueue?
+    var queue: ArgoQueue? {
+        didSet { reconcileQueueUnknowns() }
+    }
     var deliveries: [PendingDelivery] = []
     var loading = true
     var loadingOlder = false
@@ -226,16 +230,41 @@ final class ConversationState {
 
     func record(_ receipt: ArgoSendReceipt, for id: String) {
         guard let index = deliveries.firstIndex(where: { $0.id == id }) else { return }
-        if receipt.delivered { deliveries[index].status = .delivered }
+        deliveries[index].queueItemID = receipt.queued?.id
+        if let item = receipt.queued, let reason = deliveryUnknown(for: item) {
+            deliveries[index].status = .unknown(reason)
+        }
+        else if receipt.delivered { deliveries[index].status = .delivered }
         else if receipt.pasted { deliveries[index].status = .pasted(receipt.note) }
         else { deliveries[index].status = .queued(receipt.note) }
         deliveries[index].duplicate = receipt.duplicate
+        // A queue read may finish before this receipt supplies its item ID.
+        reconcileQueueUnknowns()
         // Keep the receipt across native-session changes, but not its old queue snapshot.
         if case .message(let message) = deliveries[index].operation,
            message.target == transcript.identity {
             queue = receipt.queue
         }
         trimSuccessfulDeliveries()
+    }
+
+    /// Keep explicit unknown evidence through stale queue snapshots. Absence
+    /// from a queue or matching transcript text never establishes delivery.
+    func deliveryUnknown(for item: ArgoQueuedMessage) -> String? {
+        if !item.deliveryUnknown.isEmpty { return item.deliveryUnknown }
+        if let delivery = deliveries.first(where: { $0.queueItemID == item.id }),
+           case .unknown(let reason) = delivery.status { return reason }
+        return nil
+    }
+
+    private func reconcileQueueUnknowns() {
+        guard let queue, queue.run == key.run else { return }
+        for index in deliveries.indices {
+            guard let id = deliveries[index].queueItemID,
+                  let item = queue.items.first(where: { $0.id == id }),
+                  !item.deliveryUnknown.isEmpty else { continue }
+            deliveries[index].status = .unknown(item.deliveryUnknown)
+        }
     }
 
     private func trimSuccessfulDeliveries() {

@@ -749,14 +749,18 @@ public struct ArgoQueuedMessage: Decodable, Equatable, Identifiable, Sendable {
     public let text: String
     public let source: String
     public let created: String
+    /// Nonempty when the host may already have submitted this item. It keeps
+    /// the record for review and forbids automatic delivery or manual resend.
+    public let deliveryUnknown: String
 
-    private enum CodingKeys: String, CodingKey { case id, text, source, created }
+    private enum CodingKeys: String, CodingKey { case id, text, source, created, deliveryUnknown }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.value(.id, or: "")
         text = try c.value(.text, or: "")
         source = try c.value(.source, or: "")
         created = try c.value(.created, or: "")
+        deliveryUnknown = try c.value(.deliveryUnknown, or: "")
     }
 }
 
@@ -783,10 +787,10 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
 public struct ArgoSendReceipt: Equatable, Sendable {
     public let run: String
     public let attempt: String
-    /// Written into the Agent now. false: queued, loomd delivers it when
-    /// the Agent is idle (also with no app open).
+    /// Written into the Agent now. false: inspect the queued item; an item
+    /// with deliveryUnknown is held for review and must not be sent again.
     public let delivered: Bool
-    /// The queued entry, when queued.
+    /// The retained entry, including an uncertain delivery held for review.
     public let queued: ArgoQueuedMessage?
     public let queue: ArgoQueue
     /// The text sits in the CLI's input box without its Enter (a permission
