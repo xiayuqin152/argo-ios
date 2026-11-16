@@ -28,7 +28,7 @@ argo pair
 
 在 App 中扫描二维码、点击**粘贴配对码**，或手动输入完整的 `argo1:` 码。配对码有效期为 10 分钟，只能使用一次。扫码需相机权限和受支持设备；粘贴与手动输入持续可用。手机须能访问该主机，连接局域网时按提示允许本地网络访问。
 
-主机需支持手机会话读取、消息回执和队列全文；手机提醒另需通知注册及主机的 APNs 配置。具体能力要求见[主机兼容要求](ios/README.md#host-compatibility)，后端源码变更见 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44)。目前尚未指定已发布的最低主机版本。
+主机需支持手机会话读取、消息回执和队列全文；手机提醒另需通知注册及主机的 APNs 配置。具体能力要求见[主机兼容要求](ios/README.md#host-compatibility)。后端源码变更在主机项目中单独跟踪，目前尚未指定已发布的最低主机版本。iOS 源码变更见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。
 
 ## 手机提醒
 

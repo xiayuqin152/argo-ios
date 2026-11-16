@@ -5,8 +5,8 @@ Argo host with the mobile capabilities below; the host is installed and upgraded
 separately.
 
 A minimum released host version has not been specified. Host source changes
-are tracked in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44), and iOS
-source changes in [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3).
+are tracked separately from this public iOS repository. iOS source changes are
+tracked in [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3).
 Confirm the capabilities below on the host you deploy before pairing.
 
 | Feature | Required host capability and phone behavior |

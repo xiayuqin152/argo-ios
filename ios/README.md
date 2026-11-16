@@ -46,7 +46,7 @@ xcodebuild -jobs 2 \
 | 队列与早先记录 | 支持队列预览、按原消息读取全文和早先交接记录；结果未知时保留回执，不自动重发 |
 | 手机提醒 | 支持已配对设备的通知注册，并配置主机自己的 APNs |
 
-后端源码变更见 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44)，iOS 源码变更见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。配对与回复需在实际部署的主机上验收；启用手机提醒时还需验收 APNs。
+后端源码变更在主机项目中单独跟踪，iOS 源码变更见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。配对与回复需在实际部署的主机上验收；启用手机提醒时还需验收 APNs。
 
 旧主机需升级到具备这些能力的版本。完整能力说明与开发者接口约定见[主机兼容说明](../docs/COMPATIBILITY.md)，队列接口见[queue wire v2](../research/queue-wire-v2/queue-wire-v2.md)。
 

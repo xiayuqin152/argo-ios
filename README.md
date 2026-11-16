@@ -28,7 +28,7 @@ argo pair
 
 In the app, scan its QR code, tap **Paste Pairing Code**, or enter the complete `argo1:` code. A code is single-use and expires after 10 minutes. Scanning needs camera permission and a supported device; paste and manual entry remain available. Allow local-network access when prompted, and make sure the phone can reach the host.
 
-Use an Argo host that supports mobile conversation reads, message receipts and full queue-message reads. Phone alerts additionally require notification registration and the host's APNs setup. See the [host capability requirements](ios/README.md#host-compatibility); host source changes are tracked in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). A minimum released host version has not been specified.
+Use an Argo host that supports mobile conversation reads, message receipts and full queue-message reads. Phone alerts additionally require notification registration and the host's APNs setup. See the [host capability requirements](ios/README.md#host-compatibility); host source changes are tracked separately from this public iOS repository. A minimum released host version has not been specified.
 
 ## Phone alerts
 
