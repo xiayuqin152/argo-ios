@@ -828,6 +828,25 @@ public struct ArgoQueuedMessage: Decodable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// A read-only reference to handoffs retained on an earlier run of the same
+/// native session. Read the original queue with `sourceRun`; keep its target.
+public struct ArgoNativeHistorySource: Decodable, Equatable, Sendable {
+    public let sourceRun: String
+    public let target: ArgoAgentIdentity
+    public let nativeHistory: Int
+
+    private enum CodingKeys: String, CodingKey { case sourceRun, target, nativeHistory }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sourceRun = try c.decode(String.self, forKey: .sourceRun)
+        target = try c.decode(ArgoAgentIdentity.self, forKey: .target)
+        nativeHistory = try c.decode(Int.self, forKey: .nativeHistory)
+        guard ArgoRun.isManaged(sourceRun), target.run == sourceRun, target.isValid, nativeHistory >= 0 else {
+            throw DecodingError.dataCorruptedError(forKey: .sourceRun, in: c, debugDescription: "Invalid native history source")
+        }
+    }
+}
+
 /// A run's message queue (queueView). `hold`: why queued messages wait
 /// ("" = they go at the next look).
 public struct ArgoQueue: Decodable, Equatable, Sendable {
@@ -843,9 +862,13 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
     public let truncatedFields: [String]
     /// Ordinary unsent and scheduled messages. Absent on pre-handoff hosts.
     public let pending: Int?
+    /// Total read-only handoffs, including those referenced by nativeSources.
     public let nativeHistory: Int
+    /// Earlier-run references, without their bodies or sendable items.
+    /// nil means the host did not provide sources, not that history is absent.
+    public let nativeSources: [ArgoNativeHistorySource]?
 
-    private enum CodingKeys: String, CodingKey { case run, ws, identity, state, ended, hold, items, later, pending, nativeHistory, truncatedFields }
+    private enum CodingKeys: String, CodingKey { case run, ws, identity, state, ended, hold, items, later, pending, nativeHistory, nativeSources, truncatedFields }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         run = try c.value(.run, or: "")
@@ -859,6 +882,7 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
         truncatedFields = try c.contains(.truncatedFields) ? c.decode([String].self, forKey: .truncatedFields) : []
         pending = try c.decodeIfPresent(Int.self, forKey: .pending)
         nativeHistory = try c.value(.nativeHistory, or: 0)
+        nativeSources = try c.decodeIfPresent([ArgoNativeHistorySource].self, forKey: .nativeSources)
     }
 }
 
