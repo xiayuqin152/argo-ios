@@ -399,3 +399,13 @@
 "The host returned an incomplete full message." = "The host returned an incomplete full message.";
 "The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version." = "The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version.";
 "Copied" = "Copied";
+
+/* Original read-only handoffs after native session resume. */
+"Handoffs Before Resume" = "Handoffs Before Resume";
+"Read-only records from the original conversation. These are not pending messages or confirmation of model completion." = "Read-only records from the original conversation. These are not pending messages or confirmation of model completion.";
+"Loading Original Handoffs…" = "Loading Original Handoffs…";
+"Original handoff records could not be loaded." = "Original handoff records could not be loaded.";
+"Refresh Records" = "Refresh Records";
+"The original handoff source changed. Refresh the conversation." = "The original handoff source changed. Refresh the conversation.";
+"No matching original handoff records were returned. Refresh the conversation." = "No matching original handoff records were returned. Refresh the conversation.";
+"No remaining visible records for this source. Refresh the conversation to update its sources." = "No remaining visible records for this source. Refresh the conversation to update its sources.";

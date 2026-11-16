@@ -24,6 +24,7 @@ struct ChatView: View {
     @State private var inputOwner: ComposerInputOwner?
     @State private var nativeToHide: (item: ArgoQueuedMessage, key: SessionKey)?
     @State private var queuePresentation = SeenPresentation()
+    @State private var historyPresentation = SeenPresentation()
 
     private var attachPresentation: SeenPresentation { attachPanel.presentation }
 
@@ -217,6 +218,11 @@ struct ChatView: View {
             if value == nil, let read = state.queueItemRead { model.closeQueueItem(read) }
         }), onDismiss: { queuePresentation.didDismiss(in: model) }) { read in
             QueueFullMessageView(read: read)
+        }
+        .sheet(item: Binding(get: { state.nativeHistoryRead }, set: { value in
+            if value == nil, let read = state.nativeHistoryRead { model.closeNativeHistory(read) }
+        }), onDismiss: { historyPresentation.didDismiss(in: model) }) { read in
+            NativeHistoryView(read: read)
         }
         .environment(\.openURL, OpenURLAction { url in
             openMessageURL(url, item: nil, key: fileKey, identity: fileIdentity)
@@ -425,6 +431,35 @@ struct ChatView: View {
             .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
         }
+        if !state.nativeHistorySources.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Label("Handoffs Before Resume", systemImage: "clock.arrow.circlepath")
+                    .font(Theme.Font.captionStrong)
+                Text("Read-only records from the original conversation. These are not pending messages or confirmation of model completion.")
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                ForEach(Array(state.nativeHistorySources.enumerated()), id: \.offset) { _, source in
+                    Button {
+                        guard historyPresentation.owner == nil else { return }
+                        model.openNativeHistory(source, for: state.key)
+                        if state.nativeHistoryRead != nil { historyPresentation.cover(in: model, conversation: state.key) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                                Text(verbatim: source.sourceRun).lineLimit(2)
+                                Text("Native records: \(source.nativeHistory)").font(Theme.Font.caption)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).tapTargetHeight()
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.status.isConnected)
+                }
+            }
+            .padding(Theme.Space.m)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+        }
     }
 
     @ViewBuilder private func queueMessage(_ item: ArgoQueuedMessage) -> some View {
@@ -444,6 +479,82 @@ struct ChatView: View {
         guard queuePresentation.owner == nil else { return }
         model.openQueueItem(item, for: state.key, copy: copy)
         if state.queueItemRead != nil { queuePresentation.cover(in: model, conversation: state.key) }
+    }
+}
+
+private struct NativeHistoryView: View {
+    @Bindable var read: NativeHistoryRead
+    @Environment(AppModel.self) private var model
+    @State private var nativeToHide: ArgoQueuedMessage?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
+                    Text("Read-only records from the original conversation. These are not pending messages or confirmation of model completion.")
+                        .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                    Text(verbatim: [read.key.workspace, read.source.sourceRun, read.source.target.engine,
+                                    read.source.target.session].joined(separator: "\n"))
+                        .font(Theme.Font.caption).readingContent().textSelection(.enabled)
+                    if read.loading { ProgressView("Loading Original Handoffs…") }
+                    if let problem = read.problem {
+                        NoticeBanner(text: L10n.text("Original handoff records could not be loaded.") + "\n" + problem,
+                                     tone: .caution, lineLimit: nil)
+                    }
+                    if let problem = read.hideProblem {
+                        NoticeBanner(text: problem, tone: .caution, lineLimit: nil)
+                    }
+                    if !read.loading {
+                        Button("Refresh Records") { model.refreshNativeHistory(read) }
+                            .disabled(!model.status.isConnected || !read.hidingIDs.isEmpty).tapTargetHeight()
+                    }
+                    ForEach(read.rows) { item in
+                        if let native = item.native {
+                            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                                Label(L10n.text(native.state == .accepted ? "Codex Received" : "Native Receipt Unknown"),
+                                      systemImage: native.state == .accepted ? "tray" : Theme.Icon.warning)
+                                    .font(Theme.Font.captionStrong)
+                                NativeHandoffDetails(native: native, target: item.target, currentIdentity: read.source.target)
+                                if item.isIncomplete {
+                                    Text("Shortened preview — original content remains on the host.")
+                                        .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+                                }
+                                Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.disabled)
+                                HStack(spacing: Theme.Space.l) {
+                                    Button("Copy Full Message") { model.openNativeHistoryItem(item, in: read, copy: true) }.tapTargetHeight()
+                                    Button("View Full Message") { model.openNativeHistoryItem(item, in: read) }.tapTargetHeight()
+                                }
+                                .font(Theme.Font.captionStrong).disabled(!model.status.isConnected)
+                                Button("Hide Record") { nativeToHide = item }
+                                    .font(Theme.Font.captionStrong).tapTargetHeight()
+                                    .disabled(!model.status.isConnected || read.hidingIDs.contains(item.id) || read.hideProblem != nil)
+                            }
+                            .padding(Theme.Space.m)
+                            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+                        }
+                    }
+                    if !read.loading, read.problem == nil, read.rows.isEmpty {
+                        Text("No remaining visible records for this source. Refresh the conversation to update its sources.")
+                            .font(Theme.Font.caption).readingContent()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.Space.m)
+            }
+            .navigationTitle("Handoffs Before Resume")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.closeNativeHistory(read) } } }
+        }
+        .confirmationDialog("Hide Handoff Record?", isPresented: Binding(get: { nativeToHide != nil }, set: { if !$0 { nativeToHide = nil } }),
+                            titleVisibility: .visible, presenting: nativeToHide) { item in
+            Button("Hide Record", role: .destructive) { model.hideNativeHistoryItem(item, in: read) }
+        } message: { _ in
+            Text("This only hides the Argo status record. It does not cancel or retract input already received by Codex.")
+        }
+        .sheet(item: Binding(get: { read.queueItemRead }, set: { value in
+            if value == nil, let full = read.queueItemRead { model.closeQueueItem(full) }
+        })) { full in
+            QueueFullMessageView(read: full)
+        }
     }
 }
 
@@ -467,7 +578,7 @@ private struct QueueFullMessageView: View {
                             NativeHandoffDetails(native: native, target: item.target, currentIdentity: read.identity)
                         } else {
                             Text("Original Conversation").font(Theme.Font.captionStrong)
-                            Text(verbatim: [read.key.workspace, read.key.run, item.target?.session ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"))
+                            Text(verbatim: [read.key.workspace, read.run, item.target?.session ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"))
                                 .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
                         }
                         Text(verbatim: item.text).readingContent().textSelection(.enabled)

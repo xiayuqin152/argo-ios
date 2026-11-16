@@ -386,6 +386,7 @@ final class AppModel {
 
     func refreshConversation() {
         conversation?.closeQueueItem()
+        conversation?.closeNativeHistory()
         if let state = conversation, !state.followingLatest, state.transcript.identity != nil {
             readWindow(.around(state.transcript.start), followingLatest: false)
         } else { startConversationPolling() }
@@ -406,18 +407,22 @@ final class AppModel {
             read.problem = L10n.text("The queue item changed. Refresh the conversation.")
             return
         }
+        loadQueueItem(read, using: connection)
+    }
+
+    private func loadQueueItem(_ read: QueueItemRead, using connection: ArgoConnection) {
         let epoch = hostEpoch
         read.task = Task { [weak self, weak read] in
             guard let self, let read else { return }
             defer { read.task = nil }
             do {
-                let full = try await connection.queueItem(run: key.run, itemID: source.id)
+                let full = try await connection.queueItem(run: read.run, itemID: read.source.id)
                 try Task.checkCancellation()
                 guard isCurrentHost(epoch), self.connection === connection else { return }
                 guard queueReadIsCurrent(read) else { closeQueueItem(read); return }
                 // The displayed row may carry an accepted ACK stronger than
                 // the raw queue's old ordinary/unknown snapshot.
-                guard full.ws == key.workspace, full.identity == identity, full.state == read.queueState,
+                guard full.run == read.run, full.ws == read.key.workspace, full.identity == read.identity, full.state == read.queueState,
                       full.ended == read.ended, full.later == read.later, read.displayed.matchesFullItem(full.item) else {
                     throw ArgoClientError.invalidResponse(.message("The queue item changed. Refresh the conversation."))
                 }
@@ -432,7 +437,14 @@ final class AppModel {
 
     private func queueReadIsCurrent(_ read: QueueItemRead) -> Bool {
         guard active, conversationVisible, selectedKey == read.key, let state = conversations[read.key],
-              state.queueItemRead === read, state.transcript.identity == read.chatIdentity,
+              state.transcript.identity == read.chatIdentity else { return false }
+        if let historyID = read.historyID {
+            guard let history = state.nativeHistoryRead, history.id == historyID, nativeHistoryIsCurrent(history),
+                  history.queueItemRead === read, history.queue?.identity == read.identity,
+                  history.source.sourceRun == read.run else { return false }
+            return history.rows.contains(read.source) && read.source == read.displayed
+        }
+        guard state.queueItemRead === read, read.run == read.key.run,
               state.queue?.identity == read.identity,
               let row = state.allQueueItems.first(where: { $0.id == read.source.id }) else { return false }
         return row == read.source && (state.nativeRecord(for: row) ?? row) == read.displayed
@@ -444,8 +456,130 @@ final class AppModel {
     }
 
     func closeQueueItem(_ read: QueueItemRead) {
+        if let historyID = read.historyID {
+            guard let history = conversations[read.key]?.nativeHistoryRead, history.id == historyID,
+                  history.queueItemRead === read else { return }
+            history.closeQueueItem()
+            return
+        }
         guard let state = conversations[read.key], state.queueItemRead === read else { return }
         state.closeQueueItem()
+    }
+
+    func openNativeHistory(_ source: ArgoNativeHistorySource, for key: SessionKey) {
+        guard active, conversationVisible, selectedKey == key, let state = conversations[key],
+              state.nativeHistorySources.contains(source) else { return }
+        state.closeQueueItem()
+        state.closeNativeHistory()
+        let read = NativeHistoryRead(key: key, source: source, ownerIdentity: state.queue?.identity,
+                                     chatIdentity: state.transcript.identity)
+        state.nativeHistoryRead = read
+        guard nativeHistoryIsCurrent(read) else {
+            read.problem = L10n.text("The original handoff source changed. Refresh the conversation.")
+            return
+        }
+        refreshNativeHistory(read)
+    }
+
+    private func nativeHistoryIsCurrent(_ read: NativeHistoryRead) -> Bool {
+        guard active, conversationVisible, selectedKey == read.key, let state = conversations[read.key],
+              state.nativeHistoryRead === read, state.transcript.identity == read.chatIdentity,
+              state.queue?.run == read.key.run, state.queue?.ws == read.key.workspace,
+              state.queue?.identity == read.ownerIdentity else { return false }
+        return state.nativeHistorySources.contains(read.source)
+    }
+
+    func refreshNativeHistory(_ read: NativeHistoryRead) {
+        guard nativeHistoryIsCurrent(read), read.hidingIDs.isEmpty else { return }
+        read.task?.cancel()
+        read.closeQueueItem()
+        read.queue = nil
+        read.problem = nil
+        guard status.isConnected, let connection, connection.host.id == read.key.host,
+              let owner = read.ownerIdentity, owner.isValid, owner.run == read.key.run,
+              owner == read.chatIdentity, read.source.nativeHistory > 0,
+              ArgoRun.isManaged(read.source.sourceRun), read.source.sourceRun != read.key.run,
+              read.source.target.isValid, read.source.target.run == read.source.sourceRun,
+              read.source.target.engine == owner.engine, read.source.target.session == owner.session else {
+            read.loading = false
+            read.problem = L10n.text("The original handoff source changed. Refresh the conversation.")
+            return
+        }
+        let epoch = hostEpoch
+        let loadID = UUID()
+        read.loadID = loadID
+        read.loading = true
+        read.task = Task { [weak self, weak read] in
+            guard let self, let read else { return }
+            defer {
+                if read.loadID == loadID { read.loading = false; read.task = nil }
+            }
+            do {
+                let queue = try await connection.queue(run: read.source.sourceRun)
+                try Task.checkCancellation()
+                guard isCurrentHost(epoch), self.connection === connection, nativeHistoryIsCurrent(read),
+                      read.loadID == loadID else { return }
+                guard queue.run == read.source.sourceRun, queue.ws == read.key.workspace,
+                      queue.identity == read.source.target else {
+                    throw ArgoClientError.invalidResponse(.message("The original handoff source changed. Refresh the conversation."))
+                }
+                read.queue = queue
+                read.hideProblem = nil
+                if read.rows.isEmpty && read.hiddenIDs.isEmpty {
+                    read.problem = L10n.text("No matching original handoff records were returned. Refresh the conversation.")
+                }
+            } catch {
+                guard !Task.isCancelled, isCurrentHost(epoch), self.connection === connection,
+                      nativeHistoryIsCurrent(read), read.loadID == loadID else { return }
+                read.problem = L10n.error(error)
+            }
+        }
+    }
+
+    func closeNativeHistory(_ read: NativeHistoryRead) {
+        guard let state = conversations[read.key], state.nativeHistoryRead === read else { return }
+        state.closeNativeHistory()
+    }
+
+    func openNativeHistoryItem(_ item: ArgoQueuedMessage, in history: NativeHistoryRead, copy: Bool = false) {
+        guard nativeHistoryIsCurrent(history), let queue = history.queue, history.rows.contains(item),
+              status.isConnected, let connection, connection.host.id == history.key.host else { return }
+        history.closeQueueItem()
+        let read = QueueItemRead(key: history.key, source: item, displayed: item, queue: queue,
+                                 chatIdentity: history.chatIdentity, copy: copy, historyID: history.id)
+        history.queueItemRead = read
+        loadQueueItem(read, using: connection)
+    }
+
+    func hideNativeHistoryItem(_ item: ArgoQueuedMessage, in read: NativeHistoryRead) {
+        guard nativeHistoryIsCurrent(read), status.isConnected, let connection,
+              connection.host.id == read.key.host, read.rows.contains(item), read.hideProblem == nil,
+              !read.hidingIDs.contains(item.id) else { return }
+        read.hidingIDs.insert(item.id)
+        let epoch = hostEpoch
+        read.hideTasks[item.id] = Task { [weak self, weak read] in
+            guard let self, let read else { return }
+            defer { read.hideTasks[item.id] = nil; read.hidingIDs.remove(item.id) }
+            do {
+                try await connection.hideNativeHandoff(run: read.source.sourceRun, itemID: item.id)
+                try Task.checkCancellation()
+                guard isCurrentHost(epoch), self.connection === connection, nativeHistoryIsCurrent(read) else { return }
+                read.hiddenIDs.insert(item.id)
+                if read.queueItemRead?.source.id == item.id { read.closeQueueItem() }
+                startConversationPolling()
+                refreshAgents()
+            } catch {
+                guard !Task.isCancelled, isCurrentHost(epoch), self.connection === connection,
+                      nativeHistoryIsCurrent(read) else { return }
+                let detail: String
+                switch error {
+                case ArgoClientError.deliveryUnknown(let reason): detail = L10n.error(ArgoClientError.invalidResponse(reason))
+                case ArgoClientError.http(let status, let message, _): detail = message.isEmpty ? "HTTP \(status)" : message
+                default: detail = L10n.error(error)
+                }
+                read.hideProblem = L10n.text("Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged.") + "\n" + detail
+            }
+        }
     }
 
     /// This removes only the selected Argo status record, including records
@@ -1421,6 +1555,7 @@ final class AppModel {
 
     private func cancelConversationRequests() {
         conversation?.closeQueueItem()
+        conversation?.closeNativeHistory()
         chatEpoch = UUID()
         chatTask?.cancel()
         historyTask?.cancel()

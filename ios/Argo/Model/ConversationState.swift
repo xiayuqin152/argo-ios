@@ -80,6 +80,9 @@ struct PendingDelivery: Identifiable {
 final class QueueItemRead: Identifiable {
     let id = UUID()
     let key: SessionKey
+    /// The presentation belongs to key; the HTTP resource can be an older run.
+    let run: String
+    let historyID: UUID?
     let source: ArgoQueuedMessage
     let displayed: ArgoQueuedMessage
     let identity: ArgoAgentIdentity?
@@ -93,12 +96,68 @@ final class QueueItemRead: Identifiable {
     @ObservationIgnored var task: Task<Void, Never>?
 
     init(key: SessionKey, source: ArgoQueuedMessage, displayed: ArgoQueuedMessage, queue: ArgoQueue,
-         chatIdentity: ArgoAgentIdentity?, copy: Bool) {
+         chatIdentity: ArgoAgentIdentity?, copy: Bool, historyID: UUID? = nil) {
         self.key = key; self.source = source; self.displayed = displayed
+        run = queue.run; self.historyID = historyID
         identity = queue.identity; self.chatIdentity = chatIdentity
         queueState = queue.state; ended = queue.ended
         later = queue.later.contains { $0.id == source.id }
         copyWhenLoaded = copy
+    }
+
+    func close() {
+        task?.cancel(); task = nil
+        item = nil; problem = nil
+    }
+}
+
+/// A single read-only source window. Never feeds the current queue, receipt
+/// evidence or native transcript; closing it releases every host-backed row.
+@MainActor @Observable
+final class NativeHistoryRead: Identifiable {
+    let id = UUID()
+    let key: SessionKey
+    let source: ArgoNativeHistorySource
+    let ownerIdentity: ArgoAgentIdentity?
+    let chatIdentity: ArgoAgentIdentity?
+    var queue: ArgoQueue? { didSet { closeQueueItem() } }
+    var queueItemRead: QueueItemRead?
+    var problem: String?
+    var hideProblem: String?
+    var loading = false
+    var hiddenIDs: Set<String> = []
+    var hidingIDs: Set<String> = []
+    @ObservationIgnored var task: Task<Void, Never>?
+    @ObservationIgnored var loadID = UUID()
+    @ObservationIgnored var hideTasks: [String: Task<Void, Never>] = [:]
+
+    init(key: SessionKey, source: ArgoNativeHistorySource, ownerIdentity: ArgoAgentIdentity?,
+         chatIdentity: ArgoAgentIdentity?) {
+        self.key = key; self.source = source
+        self.ownerIdentity = ownerIdentity; self.chatIdentity = chatIdentity
+    }
+
+    var rows: [ArgoQueuedMessage] {
+        ((queue?.items ?? []) + (queue?.later ?? [])).filter {
+            $0.native != nil && $0.target == source.target && !hiddenIDs.contains($0.id)
+        }
+    }
+
+    func closeQueueItem() {
+        queueItemRead?.close()
+        queueItemRead = nil
+    }
+
+    func close() {
+        loadID = UUID()
+        task?.cancel(); task = nil
+        for task in hideTasks.values { task.cancel() }
+        hideTasks.removeAll()
+        hidingIDs.removeAll()
+        closeQueueItem()
+        queue = nil
+        hiddenIDs.removeAll()
+        problem = nil; hideProblem = nil; loading = false
     }
 }
 
@@ -143,9 +202,18 @@ final class ConversationState {
     var transcript = ChatTranscript()
     var team: ArgoTeamView?
     var queue: ArgoQueue? {
-        didSet { closeQueueItem(); reconcileQueueReceipts() }
+        didSet {
+            closeQueueItem()
+            if let read = nativeHistoryRead,
+               queue?.run != key.run || queue?.ws != key.workspace || queue?.identity != read.ownerIdentity ||
+                !(queue?.nativeSources ?? []).contains(read.source) {
+                closeNativeHistory()
+            }
+            reconcileQueueReceipts()
+        }
     }
     var queueItemRead: QueueItemRead?
+    var nativeHistoryRead: NativeHistoryRead?
     var deliveries: [PendingDelivery] = []
     /// Session-owned evidence may arrive before POST binds its server item ID.
     private var queueEvidence: [String: ArgoQueuedMessage] = [:]
@@ -364,8 +432,13 @@ final class ConversationState {
     var nativeHistoryCount: Int {
         guard let queue else { return 0 }
         let hidden = allQueueItems.filter { $0.native != nil && hiddenNativeIDs.contains($0.id) }.count
-        return max(nativeQueueItems.count, queue.nativeHistory - hidden)
+        var local = max(0, queue.nativeHistory)
+        for source in queue.nativeSources ?? [] {
+            local -= min(local, max(0, source.nativeHistory))
+        }
+        return max(nativeQueueItems.count, local - hidden)
     }
+    var nativeHistorySources: [ArgoNativeHistorySource] { queue?.nativeSources ?? [] }
     var deliveryReceipts: [PendingDelivery] {
         let shown = Set(nativeQueueItems.map(\.id))
         return deliveries.filter { $0.queueItemID.map { !shown.contains($0) && !hiddenNativeIDs.contains($0) } ?? true }
@@ -379,8 +452,13 @@ final class ConversationState {
     }
 
     func closeQueueItem() {
-        queueItemRead?.task?.cancel()
+        queueItemRead?.close()
         queueItemRead = nil
+    }
+
+    func closeNativeHistory() {
+        nativeHistoryRead?.close()
+        nativeHistoryRead = nil
     }
 
     private func trimSuccessfulDeliveries() {

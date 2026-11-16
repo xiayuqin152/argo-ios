@@ -399,3 +399,13 @@
 "The host returned an incomplete full message." = "主机返回的全文仍不完整。";
 "The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version." = "主机未返回有界队列预览，请刷新会话并检查主机 Argo 版本。";
 "Copied" = "已复制";
+
+/* Original read-only handoffs after native session resume. */
+"Handoffs Before Resume" = "续接前交接";
+"Read-only records from the original conversation. These are not pending messages or confirmation of model completion." = "原会话的只读交接记录，不属于当前待发送消息，也不表示模型已处理完成。";
+"Loading Original Handoffs…" = "正在读取原交接记录…";
+"Original handoff records could not be loaded." = "无法读取原交接记录。";
+"Refresh Records" = "刷新记录";
+"The original handoff source changed. Refresh the conversation." = "原交接来源已变化，请刷新会话。";
+"No matching original handoff records were returned. Refresh the conversation." = "未返回与原身份匹配的交接记录，请刷新会话。";
+"No remaining visible records for this source. Refresh the conversation to update its sources." = "此来源已无剩余可见记录，请刷新会话以更新来源。";
