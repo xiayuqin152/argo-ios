@@ -33,6 +33,10 @@ the conversation. Refresh the host state before deciding what to do next.
 The app does not automatically resend an unknown message or repeat a send when
 it returns to the foreground.
 
+A queue send conflict (HTTP 409) is also shown as unknown: input may already
+have been pasted even when Enter was blocked. The host's explanation is kept;
+check the host or terminal state before another send.
+
 ## Queues and earlier records
 
 Native accepted or unknown handoffs and ordinary terminal sends with unknown
