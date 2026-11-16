@@ -22,6 +22,7 @@ struct ComposerPageEditor: View {
     @State private var focused = false
     @State private var cursor: NSRange?
     @State private var submission = ComposerSubmission()
+    @AppStorage(ReturnSends.enabledKey) private var returnSends = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var draft: Binding<String> {
@@ -49,6 +50,7 @@ struct ComposerPageEditor: View {
                         .accessibilityIdentifier("composer-page-done")
                 }
                 ComposerTextInput(text: draft, selection: $cursor, focused: $focused,
+                                  returnSends: returnSends,
                                   canSend: canSend && !submission.claimed,
                                   acceptsInput: { input.acceptsInput && !submission.claimed }, send: sendOnce)
                     .readingContent()
