@@ -44,6 +44,35 @@ final class ChatTranscriptTests: XCTestCase {
         XCTAssertEqual(t.nextCursor, .latest)
     }
 
+    func testAroundCanOpenAndRefreshTheSameSession() throws {
+        var t = ChatTranscript()
+        let original = try page(Fixture.chat(items: Fixture.item("original", offset: 100)))
+        XCTAssertEqual(t.apply(original, cursor: .around(position(100))), .updated)
+        let refreshed = try page(Fixture.chat(items: Fixture.item("refreshed", offset: 100, text: "中文 👨‍👩‍👧‍👦 e\u{301}")))
+        XCTAssertEqual(t.apply(refreshed, cursor: .around(position(100))), .updated)
+        XCTAssertEqual(t.items.map(\.text), ["中文 👨‍👩‍👧‍👦 e\u{301}"])
+        XCTAssertEqual(t.identity, original.identity)
+    }
+
+    func testAroundDetectsManualProcessReplacementWithinSameNativeSession() throws {
+        func manualPage(pid: Int, start: String, started: String) throws -> ArgoChatPage {
+            var body = try JSONSerialization.jsonObject(with: Data(Fixture.chat(items: Fixture.item("answer", offset: 100)).utf8)) as! [String: Any]
+            body["identity"] = ["engine": "claude", "session": "s1", "pid": pid, "start": start, "started": started]
+            return try JSONDecoder().decode(ArgoChatPage.self, from: JSONSerialization.data(withJSONObject: body))
+        }
+        var t = ChatTranscript()
+        let original = try manualPage(pid: 10, start: "100", started: "2026-11-15T10:00:00Z")
+        let restarted = try manualPage(pid: 20, start: "200", started: "2026-11-15T10:01:00Z")
+        t.apply(original, cursor: .latest)
+        XCTAssertEqual(original.identity?.session, restarted.identity?.session)
+        XCTAssertEqual(t.apply(restarted, cursor: .around(t.start)), .sessionChanged)
+        XCTAssertTrue(t.isEmpty)
+        XCTAssertNil(t.identity)
+        XCTAssertEqual(t.nextCursor, .latest)
+        XCTAssertEqual(t.apply(restarted, cursor: .latest), .updated)
+        XCTAssertEqual(t.identity, restarted.identity)
+    }
+
     func testWaitingClearsAndReports() throws {
         var t = ChatTranscript()
         t.apply(try page(Fixture.chat(items: Fixture.item("a", offset: 100))), cursor: .latest)

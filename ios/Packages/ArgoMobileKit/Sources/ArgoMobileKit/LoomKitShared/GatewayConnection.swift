@@ -450,19 +450,43 @@ final class Splice: @unchecked Sendable {
 /// credential; the certificate must match the code's fingerprint.
 public enum GatewayPairing {
     public static func pair(_ code: PairingCode, name: String, forwardedPort: Int? = nil) async throws -> GatewayCredential {
+        try Task.checkCancellation()
         let queue = DispatchQueue(label: "loom.gateway.pair")
-        let opened: OpenedStream = try await withCheckedThrowingContinuation { continuation in
-            let endpoint = forwardedPort.map { GatewayEndpoint(host: "127.0.0.1", port: $0, fingerprint: code.fingerprint) } ?? GatewayEndpoint(code)
-            StreamOpener.open(endpoint, header: .pair(secret: code.secret, name: name), queue: queue, timeout: 15) {
-                continuation.resume(with: $0.mapError { $0 as Error })
+        let attempt = GatewayPairingAttempt()
+        let opened: OpenedStream = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                queue.async {
+                    guard !attempt.cancelled else { continuation.resume(throwing: CancellationError()); return }
+                    let endpoint = forwardedPort.map { GatewayEndpoint(host: "127.0.0.1", port: $0, fingerprint: code.fingerprint) } ?? GatewayEndpoint(code)
+                    attempt.opener = StreamOpener.open(endpoint, header: .pair(secret: code.secret, name: name), queue: queue, timeout: 15) { result in
+                        attempt.opener = nil
+                        if attempt.cancelled {
+                            continuation.resume(throwing: CancellationError())
+                        } else {
+                            continuation.resume(with: result.mapError { $0 as Error })
+                        }
+                    }
+                }
+            }
+        } onCancel: {
+            queue.async {
+                attempt.cancelled = true
+                attempt.opener?.cancel()
             }
         }
         opened.connection.cancel()
+        try Task.checkCancellation()
         guard let device = opened.reply.device, GatewayCredential.validDevice(device),
               let token = opened.reply.token, GatewayCredential.validToken(token) else {
             throw GatewayError.protocolError("网关返回的设备凭据格式不对（远程上的 Argo 版本可能不匹配）")
         }
         return GatewayCredential(device: device, token: token)
     }
+}
+
+/// The pair request and its cancellation both run on the pairing queue.
+private final class GatewayPairingAttempt: @unchecked Sendable {
+    var cancelled = false
+    var opener: StreamOpener?
 }
 #endif

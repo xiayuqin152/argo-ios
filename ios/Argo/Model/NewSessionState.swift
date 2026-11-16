@@ -95,21 +95,39 @@ final class NewSessionModel {
     var current: PendingAgentCreation? { pending.first { $0.context == currentContext } }
     var creating: Bool { busyContext != nil }
     var canEdit: Bool { current == nil && !creating && storageProblem == nil }
+    private var hasDraftInput: Bool {
+        !draft.cwd.isEmpty || !draft.profile.isEmpty || draft.permission != .full || !draft.prompt.isEmpty
+    }
     var selectedProfile: ArgoAgentProfile? { profiles.first { $0.name == draft.profile } }
     var originalPrompt: String? { currentContext.flatMap { prompts[$0]?.text } }
 
     func present(host: UUID?, workspace: ArgoWorkspace?) {
+        let previous = current
+        // An edited new draft (including Start Another) must not be replaced
+        // merely because this destination also has an intent to recover.
+        let preserveNewDraft = previous == nil && hasDraftInput
         presentedHost = host
         presentedWorkspace = workspace?.id
-        currentContext = pending.last { $0.host == host && $0.workspace == workspace?.id }?.context
+        let recovered = pending.last { $0.host == host && $0.workspace == workspace?.id }
+        if recovered != nil && preserveNewDraft {
+            currentContext = nil
+        } else {
+            currentContext = recovered?.context
+            if let current { restoreDraft(current) }
+            // A reviewed first message belongs to its old destination; it must
+            // not become an editable new draft somewhere else.
+            else if previous != nil { draft.prompt = "" }
+        }
         problem = nil
-        if let current { restoreDraft(current) }
         if workspace?.roots.contains(where: { !$0.missing && $0.path == draft.cwd }) != true {
             if current == nil { draft.cwd = "" }
         }
     }
 
     func selectHost(_ host: UUID?) {
+        // Recovery text remains available through prompts[intent.context].
+        // Do not carry it into the next host as a fresh launch draft.
+        if current != nil { draft = NewSessionDraft() }
         presentedHost = host
         presentedWorkspace = nil
         currentContext = nil

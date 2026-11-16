@@ -59,5 +59,8 @@ enum AgentFilter: String, CaseIterable, Identifiable {
         case .unread: .unread
         }
     }
-    func includes(_ session: AgentSession) -> Bool { state == nil || state == session.state }
+    func includes(_ session: AgentSession) -> Bool {
+        if self == .unread { return session.card.unread }
+        return state == nil || state == session.state
+    }
 }

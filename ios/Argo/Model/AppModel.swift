@@ -51,6 +51,8 @@ final class AppModel {
     @ObservationIgnored private let makeConnection: ConnectionFactory
     @ObservationIgnored private let announce: @MainActor (String) -> Void
     @ObservationIgnored var unregisterNotifications: (@MainActor (UUID) async throws -> Void)?
+    @ObservationIgnored var prepareNotificationsForPairing: (@MainActor (UUID) async throws -> Void)?
+    @ObservationIgnored var restoreNotificationsAfterPairing: (@MainActor (UUID) async -> Void)?
     @ObservationIgnored private var notificationRoute: ArgoPushRoute?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
     @ObservationIgnored private var connection: ArgoConnection?
@@ -522,10 +524,7 @@ final class AppModel {
             return try await connection.agentSnapshot(workspace: state.key.workspace)
         }
         defer {
-            if currentReadback() {
-                refreshingAgents = false
-                refreshAgents()
-            }
+            resumeAgentPolling(afterReadback: readbackList)
             if isCurrentHost(epoch), currentChat(state, readbackChat), conversations[state.key] === state {
                 refreshConversation()
             }
@@ -549,6 +548,14 @@ final class AppModel {
             state.problem = L10n.error(error)
             if isConnectionFailure(error) { failConnection(error) }
         }
+    }
+
+    private func resumeAgentPolling(afterReadback epoch: UUID) {
+        // A readback borrows the workspace poller, not the chat's lifetime.
+        // Navigation/cancellation must return it even after the chat is gone.
+        // A newer list, workspace or connection already owns its own polling.
+        guard listEpoch == epoch else { return }
+        startAgentPolling()
     }
 
     private func startAgentPolling() {
@@ -705,10 +712,10 @@ final class AppModel {
                                                  session: state.transcript.identity?.session)
             try Task.checkCancellation()
             guard currentChat(state, epoch) else { return }
-            if let identity = page.identity, identity.run != state.key.run,
-               newSession.pending.contains(where: { $0.key == state.key }) {
-                // Do not render another owner's native page under a receipt's
-                // managed key while awaiting the next terminal observation.
+            if let identity = page.identity,
+               identity.run != (ArgoRun.isManaged(state.key.run) ? state.key.run : nil) {
+                // Chat reads the terminal's current owner. Its native page must
+                // still belong to the selected key, even between list polls.
                 cancelSends()
                 state.sessionChanged()
                 throw ArgoClientError.invalidResponse(.message("The terminal opened a different conversation. Your draft is kept; review the new conversation before sending."))
@@ -1099,7 +1106,6 @@ final class AppModel {
                         } else {
                             state.failModelRecoveryRefresh(operation.id, problem: problem)
                         }
-                        startAgentPolling()
                         startConversationPolling()
                     } else {
                         // A newer list owns the current view. Do not cancel it
@@ -1110,6 +1116,7 @@ final class AppModel {
                         }
                     }
                 }
+                resumeAgentPolling(afterReadback: readbackList)
                 pruneConversations()
             }
             @MainActor func readCards() async throws -> [ArgoAgentCard] {
@@ -1212,10 +1219,13 @@ final class AppModel {
         pairTask = Task { [weak self] in
             guard let self else { return }
             defer { pairing = false; pairTask = nil }
+            var replacingHost: UUID?
             do {
+                try Task.checkCancellation()
                 if let parsed = try? PairingCode(parsing: code),
                    let old = hosts.first(where: { PairingCode.sameHost($0.address, parsed.host) && $0.gatewayPort == parsed.port }) {
-                    try await unregisterNotifications?(old.id)
+                    replacingHost = old.id
+                    try await prepareNotificationsForPairing?(old.id)
                     try Task.checkCancellation()
                 }
                 let paired = try await store.pair(code: code, deviceName: deviceName, name: name)
@@ -1228,9 +1238,11 @@ final class AppModel {
             } catch is CancellationError {
                 // Persistence may already have completed; cancellation only stops UI completion.
             } catch {
-                guard !Task.isCancelled, active else { return }
-                pairingProblem = L10n.error(error)
+                if !Task.isCancelled, active { pairingProblem = L10n.error(error) }
             }
+            // Re-read persisted pairing even after cancellation: it may contain
+            // either the original credential or a successfully saved replacement.
+            if let replacingHost { await restoreNotificationsAfterPairing?(replacingHost) }
         }
     }
 
