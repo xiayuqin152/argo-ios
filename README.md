@@ -32,7 +32,7 @@ Use an Argo host that supports mobile conversation reads, message receipts and f
 
 ## Phone alerts
 
-After pairing, select a host and enable **Settings → Notifications → Agent Alerts on This iPhone**. Alerts contain status only. Tapping one opens its paired host and session without sending a message; alerts from disabled or replaced registrations are ignored. A suitably signed app, notification permission and the host's own APNs setup are required; see [configuration and permissions](docs/phone-notifications.md).
+After pairing, select a host and enable **Settings → Notifications → Agent Alerts on This Device**. Alerts contain status only. Tapping one opens its paired host and session without sending a message; alerts from disabled or replaced registrations are ignored. A suitably signed app, notification permission and the host's own APNs setup are required; see [configuration and permissions](docs/phone-notifications.md).
 
 Signing, actual APNs delivery and background receipt on a device await validation. The app reads sessions while in the foreground and reconnects when reopened.
 

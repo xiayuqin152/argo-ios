@@ -52,6 +52,6 @@ private struct ArgoBootstrap: View {
             model?.prepareNotificationsForPairing = { id in try await PhoneNotifications.shared.prepareForPairing(id) }
             model?.restoreNotificationsAfterPairing = { id in await PhoneNotifications.shared.restoreAfterPairing(id) }
             problem = nil
-        } catch { problem = error.localizedDescription }
+        } catch { problem = L10n.error(error) }
     }
 }

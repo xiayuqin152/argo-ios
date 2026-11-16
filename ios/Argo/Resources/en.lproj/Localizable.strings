@@ -140,6 +140,8 @@
 "The native conversation changed. Refresh again with the same native identity before starting another model change." = "The native conversation changed. Refresh again with the same native identity before starting another model change.";
 
 /* Client errors. Server response bodies remain verbatim. */
+"Could not read the saved host store: %@" = "Could not read the saved host store: %@";
+"The saved host store is corrupted: %@. Delete it and pair again." = "The saved host store is corrupted: %@. Delete it and pair again.";
 "The connection is closed." = "The connection is closed.";
 "The operation was cancelled." = "The operation was cancelled.";
 "The host returned an error (HTTP %@)." = "The host returned an error (HTTP %@).";
@@ -356,7 +358,7 @@
 
 /* Argo phone notifications */
 "Notifications" = "Notifications";
-"Agent Alerts on This iPhone" = "Agent Alerts on This iPhone";
+"Agent Alerts on This Device" = "Agent Alerts on This Device";
 "Alerts from the selected host contain status only. Tap an alert to open its Agent." = "Alerts from the selected host contain status only. Tap an alert to open its Agent.";
 "Retry Notifications" = "Retry Notifications";
 "Open iOS Settings" = "Open iOS Settings";

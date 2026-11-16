@@ -140,6 +140,8 @@
 "The native conversation changed. Refresh again with the same native identity before starting another model change." = "原生会话已变化。请在另一轮刷新中再次读回同一原生会话，然后再发起换模型操作。";
 
 /* Client errors. Server response bodies remain verbatim. */
+"Could not read the saved host store: %@" = "无法读取保存的主机文件：%@";
+"The saved host store is corrupted: %@. Delete it and pair again." = "保存的主机文件已损坏（%@）。请删除该文件后重新配对。";
 "The connection is closed." = "连接已关闭。";
 "The operation was cancelled." = "操作已取消。";
 "The host returned an error (HTTP %@)." = "远程返回错误（HTTP %@）。";
@@ -356,7 +358,7 @@
 
 /* Argo phone notifications */
 "Notifications" = "通知";
-"Agent Alerts on This iPhone" = "在此 iPhone 接收 Agent 提醒";
+"Agent Alerts on This Device" = "在此设备接收 Agent 提醒";
 "Alerts from the selected host contain status only. Tap an alert to open its Agent." = "所选主机的提醒仅包含状态。轻点提醒打开对应的 Agent。";
 "Retry Notifications" = "重试通知注册";
 "Open iOS Settings" = "打开 iOS 设置";

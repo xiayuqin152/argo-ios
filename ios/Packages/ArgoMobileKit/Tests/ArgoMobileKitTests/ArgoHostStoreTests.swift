@@ -299,11 +299,19 @@ final class ArgoHostStoreTests: XCTestCase {
         do {
             _ = try await s.hosts()
             XCTFail("expected corrupt error")
-        } catch is LoomError {}
+        } catch let error as ArgoClientError {
+            guard case .invalidResponse(.message(let key, let arguments)) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(key, "The saved host store is corrupted: %@. Delete it and pair again.")
+            XCTAssertEqual(arguments, [url.path])
+        }
         do {
             _ = try await s.pair(code: Fixture.code(), deviceName: "p")
             XCTFail("pairing must not overwrite a corrupt file")
-        } catch is LoomError {}
+        } catch let error as ArgoClientError {
+            guard case .invalidResponse(.message(let key, let arguments)) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(key, "The saved host store is corrupted: %@. Delete it and pair again.")
+            XCTAssertEqual(arguments, [url.path])
+        }
         XCTAssertEqual(try Data(contentsOf: url), Data("{not json".utf8))
     }
 
@@ -537,14 +545,23 @@ final class ArgoHostStoreTests: XCTestCase {
         do {
             _ = try await s.hosts()
             XCTFail("unreadable metadata must not become an empty store")
-        } catch is LoomError {}
+        } catch let error as ArgoClientError {
+            guard case .invalidResponse(.message(let key, let arguments)) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(key, "Could not read the saved host store: %@")
+            XCTAssertEqual(arguments.count, 1)
+            XCTAssertTrue(arguments[0].hasPrefix("hosts.json: "))
+        }
         try FileManager.default.removeItem(at: file)
         let malformed = Data("{\"version\":1,\"hosts\":[],\"pendingCredentialCleanup\":\"invalid\"}".utf8)
         try malformed.write(to: file)
         do {
             _ = try await s.hosts()
             XCTFail("invalid ownership must fail without cleanup")
-        } catch is LoomError {}
+        } catch let error as ArgoClientError {
+            guard case .invalidResponse(.message(let key, let arguments)) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(key, "The saved host store is corrupted: %@. Delete it and pair again.")
+            XCTAssertEqual(arguments, [file.path])
+        }
         XCTAssertTrue(tokens.deletions.isEmpty)
         XCTAssertEqual(try tokens.read(unclaimed), Fixture.token)
         XCTAssertEqual(try Data(contentsOf: file), malformed)
