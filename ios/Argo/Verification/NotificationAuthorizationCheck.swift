@@ -187,6 +187,55 @@ private struct Transport: ArgoHTTPTransport {
         print("OBSERVED \(name): OS=\(f.center.status), authorization=\(f.notifications.authorization), enabled=\(f.notifications.enabledHosts.count), registerCalls=\(UIApplication.shared.registrations-before)")
         try require(f.notifications.authorization == .denied && f.notifications.enabledHosts.isEmpty && UIApplication.shared.registrations == before,
                     "Enable accepted an authorization snapshot superseded by denial")
+    case "enableSupersededAllowed", "enableSupersededDenied", "enableThenDisable", "enableThenForget", "enableThenPairing":
+        try await f.start(count: 1)
+        try await f.register()
+        let host = f.hosts[0]
+        await f.notifications.setEnabled(false, host: host)
+        try require(!f.notifications.enabledHosts.contains(host.id) && f.notifications.registrations[host.id] == nil,
+                    "Enable control did not start disabled")
+        f.center.holdNextSettings = true
+        let enable = Task { await f.notifications.setEnabled(true, host: host) }
+        try await eventually("Enable settings query did not suspend") { f.center.holdingSettings }
+        f.center.status = name == "enableSupersededDenied" ? .denied : .authorized
+        await f.notifications.refresh()
+        switch name {
+        case "enableThenDisable": await f.notifications.setEnabled(false, host: host)
+        case "enableThenForget":
+            try await f.notifications.forgetHost(host.id)
+            try await f.store.remove(host.id)
+            f.notifications.hostsChanged([])
+            await f.notifications.refresh()
+        case "enableThenPairing":
+            try await f.notifications.prepareForPairing(host.id)
+            let code = "argo1:fixture0.invalid:6779:\(Base64URL.encode(Data(repeating: 4, count: 32))):\(Base64URL.encode(Data(repeating: 2, count: 16)))"
+            let replacement = try await f.store.pair(code: code, deviceName: "fixture-new")
+            try require(replacement.id == host.id && replacement.deviceID != host.deviceID, "Pairing control did not replace the same host")
+            await f.notifications.restoreAfterPairing(host.id)
+            f.notifications.hostsChanged([replacement])
+            await f.notifications.refresh()
+        default: break
+        }
+        let before = await f.boundary.writes.count
+        let registerBefore = UIApplication.shared.registrations
+        f.center.releaseSettings(); await enable.value
+        let enabled = f.notifications.enabledHosts.contains(host.id)
+        let receipt = f.notifications.registrations[host.id]
+        let problem = f.notifications.problem(for: host.id) != nil
+        let savedIntent = NotificationTestPlatform.defaults.stringArray(forKey: "argo.push.enabledHosts.v1")?.contains(host.id.uuidString) == true
+        let late = Array(await f.boundary.writes.dropFirst(before))
+        print("OBSERVED \(name): authorization=\(f.notifications.authorization), enabled=\(enabled), receipt=\(receipt != nil), busy=\(f.notifications.busy), problem=\(problem), latePUT=\(late.filter { $0.method == "PUT" }.count)")
+        if name == "enableSupersededAllowed" {
+            try require(f.notifications.authorization == .authorized && enabled && savedIntent && receipt?.hostID == host.id &&
+                        receipt?.deviceID == host.deviceID && !f.notifications.busy && !problem &&
+                        late.count == 1 && late[0].method == "PUT" && late[0].host == host.id,
+                        "Newer allowed refresh discarded the explicit enable intent")
+        } else {
+            try require(!enabled && !savedIntent && receipt == nil && !f.notifications.busy && late.isEmpty &&
+                        UIApplication.shared.registrations == registerBefore,
+                        "Superseded enable reversed current permission or a newer host action")
+            if name != "enableSupersededDenied" { try require(!problem, "Superseded enable changed visible error state") }
+        }
     case "grantThenDenied", "deniedThenGranted":
         try await f.start(enabled: false, count: 1)
         // The prompt result precedes the separate settings snapshot.

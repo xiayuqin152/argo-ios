@@ -25,6 +25,7 @@ final class PhoneNotifications {
     @ObservationIgnored private var token: String?
     @ObservationIgnored private var last: Task<Void, Never>?
     @ObservationIgnored private var pairingHosts: [UUID: Int] = [:]
+    @ObservationIgnored private var enableRequests: [UUID: UUID] = [:]
     @ObservationIgnored private var authorizationGeneration = 0
     @ObservationIgnored private var hasAuthorizationSnapshot = false
     private static let enabledKey = "argo.push.enabledHosts.v1"
@@ -80,12 +81,24 @@ final class PhoneNotifications {
     }
 
     func setEnabled(_ enabled: Bool, host: LoomHost) async {
-        busy = true; defer { busy = false }
+        let request = UUID()
+        enableRequests[host.id] = enabled ? request : nil
+        busy = true
+        defer {
+            if enableRequests[host.id] == request { enableRequests.removeValue(forKey: host.id) }
+            busy = false
+        }
         do {
             if enabled {
                 do { _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
-                catch { authorizationProblem = L10n.error(error); return }
-                guard await readAuthorization() else { return }
+                catch {
+                    if enableRequests[host.id] == request { authorizationProblem = L10n.error(error) }
+                    return
+                }
+                guard enableRequests[host.id] == request else { return }
+                // A newer settings query replaces the snapshot, not this intent.
+                _ = await readAuthorization()
+                guard enableRequests[host.id] == request else { return }
                 guard Self.allowed(authorization) else {
                     authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
                     return
@@ -107,6 +120,7 @@ final class PhoneNotifications {
     /// Called before deleting the host credential. An offline failure keeps the
     /// credential and intent available so the user can retry the same DELETE.
     func forgetHost(_ id: UUID) async throws {
+        enableRequests.removeValue(forKey: id)
         do {
             try await sequence { [self] in
                 guard enabledHosts.contains(id) || registrations[id] != nil else { return }
@@ -121,6 +135,7 @@ final class PhoneNotifications {
     /// Re-pairing replaces a credential without changing the user's alert intent.
     /// Pause immediately so an older PUT cannot publish while waiting for DELETE.
     func prepareForPairing(_ id: UUID) async throws {
+        enableRequests.removeValue(forKey: id)
         pairingHosts[id, default: 0] += 1
         do {
             try await sequence { [self] in
