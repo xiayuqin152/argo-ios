@@ -106,6 +106,15 @@ jobs:
             "$RUNNER_TEMP/argo-ios/packages/"*.ipa \
             > "$RUNNER_TEMP/argo-ios/logs/packages.sha256"
 
+      - name: Validate the unsigned iPhone package
+        run: |
+          set -euo pipefail
+          python3 ios/scripts/check_package.py \
+            --archive-app "$RUNNER_TEMP/argo-ios/Argo-iphoneos-unsigned.xcarchive/Products/Applications/Argo.app" \
+            --ipa "$RUNNER_TEMP/argo-ios/packages/Argo-unsigned.ipa" \
+            --summary "$RUNNER_TEMP/argo-ios/logs/package-check.json" \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/package-check.log"
+
       - name: Run native UIKit input tests on an available Simulator
         run: |
           set -euo pipefail
