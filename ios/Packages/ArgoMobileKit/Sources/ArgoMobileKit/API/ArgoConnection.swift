@@ -226,6 +226,24 @@ public actor ArgoConnection {
         return result
     }
 
+    /// Removes an ordinary queue record, including a held deliveryUnknown item.
+    /// Pass its original run and ID. Removal does not retract possible input;
+    /// native handoffs use hideNativeHandoff instead. No write is replayed.
+    public func removeQueueItem(run: String, itemID: String) async throws -> ArgoQueue {
+        let runPath = try Self.managedSegment(run)
+        guard !itemID.isEmpty else {
+            throw ArgoClientError.refusedLocally(.message("The queue item has no identifier. Refresh the conversation."))
+        }
+        let response = try await perform(HTTPRequest(method: "DELETE", target: "/api/agents/\(runPath)/queue/\(Self.segment(itemID))?bounded=1",
+                                                    maxResponseBodyBytes: ArgoQueue.previewByteLimit - 1), authRetry: false)
+        try validateQueuePreview(response, write: true)
+        let result: ArgoQueue = try receipt(response)
+        guard result.run == run, result.identity?.run == run else {
+            throw ArgoClientError.invalidResponse(.message("The queue item changed. Refresh the conversation."))
+        }
+        return result
+    }
+
     /// Hides only an Argo native handoff record. Codex input is not retracted.
     /// No resend, auth replay, or assumed response body is involved.
     public func hideNativeHandoff(run: String, itemID: String) async throws {
