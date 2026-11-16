@@ -447,6 +447,23 @@ private actor DeliveryTransport: ArgoHTTPTransport {
           !native.isFirstResponder, await transport.requests.isEmpty else {
         throw CheckFailure("Stale owner/native responder edited, changed selection or submitted")
     }
+    // Identity returning before any UI revocation callback must not revive
+    // the original owner: native-session generations remain distinct.
+    await transport.switchNative(to: "native-r1")
+    model.showLatest()
+    try await eventually("N1 returned before UI revocation") {
+        state.transcript.identity?.session == "native-r1" && !state.loadingOlder
+    }
+    old.commit("late callback after identity round trip")
+    page.sendOnce()
+    guard old.valid, !old.canCommit, state.draft == original, await transport.requests.isEmpty else {
+        throw CheckFailure("Identity round trip revived the owner before UI revocation")
+    }
+    await transport.switchNative(to: "native-r1-next")
+    model.showLatest()
+    try await eventually("N2 restored before UI revocation") {
+        state.transcript.identity?.session == "native-r1-next" && !state.loadingOlder
+    }
     page.inputChanged(old.canCommit)
     prompt.inputRevoked()
     guard !old.valid, !page.focused, !prompt.focused, !prompt.pagePresentation.isPresented,

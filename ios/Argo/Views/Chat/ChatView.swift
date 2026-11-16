@@ -301,10 +301,10 @@ struct ChatView: View {
               inputOwner?.acceptsInput != true else { return }
         inputOwner?.invalidate()
         let target = state
-        let identity = target.transcript.identity
+        let generation = target.nativeConversationGeneration
         inputOwner = ComposerInputOwner(state: target,
             destinationIsCurrent: { model.selectedKey == target.key && model.conversation === target &&
-                target.transcript.identity == identity },
+                target.nativeConversationGeneration == generation },
             foreground: { model.acceptsComposerInput })
     }
 

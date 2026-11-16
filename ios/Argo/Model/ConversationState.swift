@@ -225,6 +225,8 @@ final class ConversationState {
     var followingLatest = true
     var problem: String?
     var sessionNotice: String?
+    /// Input owners follow explicit native-session invalidation, not initial loading.
+    private(set) var nativeConversationGeneration = UUID()
     var creation: FirstMessageSubmission?
     var interruptStatus: InterruptStatus?
     var interruptNeedsReview = false
@@ -472,6 +474,7 @@ final class ConversationState {
     }
 
     func sessionChanged() {
+        nativeConversationGeneration = UUID()
         cancelAttachmentWork()
         sessionNotice = L10n.text("The terminal opened a different conversation. Your draft is kept; review the new conversation before sending.")
         transcript.reset()

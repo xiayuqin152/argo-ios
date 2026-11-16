@@ -10,7 +10,9 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--swiftc", required=True)
 p.add_argument("--core-build", type=Path, required=True)
 p.add_argument("--output", type=Path, required=True)
-p.add_argument("--composer-owner-only", action="store_true")
+cases = p.add_mutually_exclusive_group()
+cases.add_argument("--composer-owner-only", action="store_true")
+cases.add_argument("--load-boundaries", action="store_true")
 a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=True)
 version = subprocess.check_output([a.swiftc, "--version"], text=True)
@@ -123,6 +125,9 @@ core = a.core_build / "debug"
 objects = sorted((core / "ArgoMobileKit.build").glob("*.o"))
 assert objects, "Build actual ArgoMobileKit before running this check"
 binary = a.output / "mobile-delivery-check"
+fixture = "LoadBoundaryCheck" if a.load_boundaries else "MobileDeliveryCheck"
 subprocess.run([a.swiftc, "-swift-version", "6", "-parse-as-library", "-j", "2", "-I", str(core / "Modules"),
-                *map(str, objects), *sources, "research/mobile-delivery-221c/MobileDeliveryCheck.swift", "-o", str(binary)], check=True)
-subprocess.run([str(binary.resolve()), *(["--composer-owner-only"] if a.composer_owner_only else [])], check=True)
+                *map(str, objects), *sources, f"research/mobile-delivery-221c/{fixture}.swift", "-o", str(binary)], check=True)
+runs = [["initial-nil-to-valid"], ["stable-refresh"]] if a.load_boundaries else [["--composer-owner-only"] if a.composer_owner_only else []]
+for arguments in runs:
+    subprocess.run([str(binary.resolve()), *arguments], check=True)
