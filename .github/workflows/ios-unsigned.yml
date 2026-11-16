@@ -106,7 +106,15 @@ jobs:
             "$RUNNER_TEMP/argo-ios/packages/"*.ipa \
             > "$RUNNER_TEMP/argo-ios/logs/packages.sha256"
 
-      - name: Preserve any xcresult bundle
+      - name: Run native UIKit input tests on an available Simulator
+        run: |
+          set -euo pipefail
+          RETURN_EVENT_LOG_DIR="$RUNNER_TEMP/argo-ios/logs" \
+            RETURN_EVENT_XCRESULT="$RUNNER_TEMP/argo-ios/results/ReturnEventTests.xcresult" \
+            bash research/return-event/run-sdk-checks.sh auto test \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/uikit-input-tests.log"
+
+      - name: Preserve xcresult bundles
         if: always()
         run: |
           set -euo pipefail
@@ -115,7 +123,14 @@ jobs:
               -czf "$RUNNER_TEMP/argo-ios/packages/Argo-archive.xcresult.tar.gz" \
               Argo-archive.xcresult
           else
-            printf '%s\n' 'No xcresult bundle was produced.'
+            printf '%s\n' 'No Argo-archive.xcresult bundle was produced.'
+          fi
+          if [ -d "$RUNNER_TEMP/argo-ios/results/ReturnEventTests.xcresult" ]; then
+            tar -C "$RUNNER_TEMP/argo-ios/results" \
+              -czf "$RUNNER_TEMP/argo-ios/packages/ReturnEventTests.xcresult.tar.gz" \
+              ReturnEventTests.xcresult
+          else
+            printf '%s\n' 'No ReturnEventTests.xcresult bundle was produced.'
           fi
 
       - name: Upload existing outputs and logs
