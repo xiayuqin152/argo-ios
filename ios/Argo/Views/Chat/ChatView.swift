@@ -432,17 +432,10 @@ struct ChatView: View {
             Text("Shortened preview — original content remains on the host.")
                 .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
         }
-        if item.isComplete("text") {
-            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
-        } else {
-            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent()
-        }
+        Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.disabled)
         HStack(spacing: Theme.Space.l) {
-            if item.isComplete("text") { CopyMessageButton(text: item.text).tapTargetHeight() }
-            else { Button("Copy Full Message") { openQueueItem(item, copy: true) }.disabled(!model.status.isConnected).tapTargetHeight() }
-            if item.isIncomplete {
-                Button("View Full Message") { openQueueItem(item, copy: false) }.disabled(!model.status.isConnected).tapTargetHeight()
-            }
+            Button("Copy Full Message") { openQueueItem(item, copy: true) }.disabled(!model.status.isConnected).tapTargetHeight()
+            Button("View Full Message") { openQueueItem(item, copy: false) }.disabled(!model.status.isConnected).tapTargetHeight()
         }
         .font(Theme.Font.captionStrong)
     }

@@ -383,8 +383,8 @@ final class AppModel {
         let read = QueueItemRead(key: key, source: source, displayed: item, queue: queue,
                                  chatIdentity: state.transcript.identity, copy: copy)
         state.queueItemRead = read
-        let fields = copy ? ["text"] : ["text", "native.note", "deliveryUnknown"]
-        if fields.allSatisfy(item.isComplete) { read.item = item; return }
+        // Even an untruncated preview may predate a host edit or removal.
+        // Copy/view must read the current item and validate its revision.
         guard status.isConnected, let connection, connection.host.id == key.host,
               queue.run == key.run, queue.ws == key.workspace, let identity = queue.identity, identity.run == key.run else {
             read.problem = L10n.text("The queue item changed. Refresh the conversation.")

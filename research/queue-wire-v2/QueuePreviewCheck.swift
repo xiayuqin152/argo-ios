@@ -5,16 +5,21 @@ import Glibc
 private struct Failure: Error { let reason: String }
 private enum Scenario: String, CaseIterable, Sendable {
     case complete, text, sourceCopy, sourceView, unknownMarker, nativeAccepted, nativeUnknown, nativeFuture, scheduled
+    case completeUpdated, completeDeleted, completeNativeChanged
     case cachedAcceptedOldUnknown, cachedAcceptedOldOrdinary
     case missing, failed, transportFailed, wrongID, wrongRun, wrongWorkspace, wrongTarget, wrongIdentity, wrongState, wrongLater, wrongNative, wrongUpdated, wrongScheduleTime, wrongPasted, truncatedFull
     case closeLate, sessionLate, workspaceLate, hostLate, backgroundLate, threadLate, initialIdentityLate, rowLate, nativeLate, laterLate, refreshLate, replacementLate
     var delayed: Bool { rawValue.hasSuffix("Late") }
-    var fails: Bool { [.missing, .failed, .transportFailed, .wrongID, .wrongRun, .wrongWorkspace, .wrongTarget, .wrongIdentity, .wrongState, .wrongLater, .wrongNative, .wrongUpdated, .wrongScheduleTime, .wrongPasted, .truncatedFull].contains(self) }
+    var completePreview: Bool { [.complete, .completeUpdated, .completeDeleted, .completeNativeChanged].contains(self) }
+    var fails: Bool { [.completeUpdated, .completeDeleted, .completeNativeChanged, .missing, .failed, .transportFailed, .wrongID, .wrongRun, .wrongWorkspace, .wrongTarget, .wrongIdentity, .wrongState, .wrongLater, .wrongNative, .wrongUpdated, .wrongScheduleTime, .wrongPasted, .truncatedFull].contains(self) }
 }
 
 private actor QueueTransport: ArgoHTTPTransport {
     let scenario: Scenario
-    let original = "  SYNTHETIC_FULL_QUEUE🙂\n\"\\<html>&\u{2028}\n" + String(repeating: "完整原文 ", count: 4000)
+    var original: String {
+        scenario.completePreview ? "short original 完整正文🙂" :
+            "  SYNTHETIC_FULL_QUEUE🙂\n\"\\<html>&\u{2028}\n" + String(repeating: "完整原文 ", count: 4000)
+    }
     private(set) var reads: [HTTPRequest] = []
     private(set) var writes: [HTTPRequest] = []
     private var thread = "original-thread"
@@ -22,6 +27,7 @@ private actor QueueTransport: ArgoHTTPTransport {
     private var changedNative = false
     private var changedLater = false
     private var stale = false
+    private var storedChanged = false
     private var waiter: CheckedContinuation<HTTPResponse, Never>?
     private var lateResponse: HTTPResponse?
     var waiting: Bool { waiter != nil }
@@ -36,19 +42,20 @@ private actor QueueTransport: ArgoHTTPTransport {
         else { rowChanged = true }
     }
     func useStalePreview() { stale = true }
+    func changeStoredItem() { storedChanged = true }
     private func identity(_ run: String = "r1", original: Bool = false) -> [String: Any] {
         ["run": run, "engine": "codex", "session": run == "r1" ? (original ? "original-thread" : thread) : "other-thread",
          "pid": 0, "start": "", "started": "0001-01-01T00:00:00Z"]
     }
     private var isLater: Bool { scenario == .scheduled || changedLater }
     private func item(full: Bool, id: String = "q1") -> [String: Any] {
-        let hasFullText = full || [.complete, .sourceCopy, .sourceView].contains(scenario)
+        let hasFullText = full || scenario.completePreview || [.sourceCopy, .sourceView].contains(scenario)
         var value: [String: Any] = ["id": id, "text": hasFullText ? original : "  SYNTHETIC_FULL…", "submit": true,
             "source": full || ![.sourceCopy, .sourceView].contains(scenario) ? "ios" : "i…",
             "created": "2026-11-16T04:53:00Z", "target": identity(original: true),
             "updated": rowChanged ? "2026-11-16T04:54:00Z" : "2026-11-16T04:53:01Z"]
         if isLater || scenario == .wrongScheduleTime { value["not_before"] = "2026-11-17T00:00:00Z" }
-        if !full, scenario != .complete {
+        if !full, !scenario.completePreview {
             value["truncatedFields"] = [.sourceCopy, .sourceView].contains(scenario) ? ["source"] : scenario == .unknownMarker ? ["future.field"] : ["text"]
         }
         if [.nativeAccepted, .nativeUnknown, .nativeFuture, .wrongNative, .nativeLate].contains(scenario) {
@@ -58,6 +65,14 @@ private actor QueueTransport: ArgoHTTPTransport {
         if [.cachedAcceptedOldUnknown, .cachedAcceptedOldOrdinary].contains(scenario) {
             if full || !stale { value["native"] = ["state": "accepted", "note": "synthetic accepted"] }
             else if scenario == .cachedAcceptedOldUnknown { value["native"] = ["state": "unknown", "note": "synthetic earlier unknown"] }
+        }
+        if storedChanged {
+            if scenario == .completeUpdated {
+                value["text"] = "short edited 正文🙂"
+                value["updated"] = "2026-11-16T04:54:00Z"
+            } else if scenario == .completeNativeChanged {
+                value["native"] = ["state": "accepted", "note": "synthetic native acknowledgement"]
+            }
         }
         return value
     }
@@ -77,6 +92,7 @@ private actor QueueTransport: ArgoHTTPTransport {
         if path == "/api/agents/r1/queue/q1" || path == "/api/agents/r1/queue/q2" {
             reads.append(request)
             guard url.queryItems == nil, request.body == nil, !request.headers.contains(where: { $0.0 == "X-Loom-Attempt" }) else { throw Failure(reason: "full GET carries a query/body/attempt") }
+            if scenario == .completeDeleted, storedChanged { return try json(["error": "synthetic item removed"], status: 404) }
             if scenario == .missing || scenario == .failed { return try json(["error": "synthetic full read error"], status: scenario == .missing ? 404 : 500) }
             if scenario == .transportFailed { throw TransportFailure.noReply("synthetic read lost") }
             var full = item(full: true, id: path.hasSuffix("q2") ? "q2" : "q1")
@@ -160,8 +176,11 @@ private actor QueueTransport: ArgoHTTPTransport {
         try require(state.nativeQueueItems.first?.native?.state == .accepted, "stale preview erased accepted evidence")
     }
     let originalRow = (state.nativeQueueItems + state.ordinaryQueueItems)[0]
+    if [.completeUpdated, .completeDeleted, .completeNativeChanged].contains(scenario) {
+        await transport.changeStoredItem()
+    }
     if scenario == .initialIdentityLate { state.transcript.reset() }
-    model.openQueueItem(originalRow, for: key, copy: scenario != .sourceView)
+    model.openQueueItem(originalRow, for: key, copy: ![.sourceView, .completeNativeChanged].contains(scenario))
     guard let read = state.queueItemRead else { throw Failure(reason: "read presentation did not open") }
     if scenario.delayed {
         try await eventually("full read pending") { await transport.waiting }
@@ -194,11 +213,11 @@ private actor QueueTransport: ArgoHTTPTransport {
             try require(read.problem != nil && read.item == nil && model.queueItemText(read) == nil, "failed/mismatched full response exposed preview text")
             try require(state.allQueueItems.first?.id == originalRow.id, "failed read removed original row")
         } else {
-            try require(read.item?.text == transport.original && model.queueItemText(read) == transport.original, "copy/view lost original bytes")
+            let original = await transport.original
+            try require(read.item?.text == original && model.queueItemText(read) == original, "copy/view lost original bytes")
             try require(read.item?.target == originalRow.target && read.source.id == originalRow.id, "full text rebound item/target")
-            let reads = await transport.reads.count
-            try require(reads == ([.complete, .sourceCopy, .sourceView].contains(scenario) ? 0 : 1), "untruncated field fetched or truncated field skipped fetch")
         }
+        try require(await transport.reads.count == 1, "copy/view must read current full item exactly once")
     }
     try require(await transport.writes.isEmpty && state.transcript.items.isEmpty && state.deliveries.isEmpty, "read created an input/receipt/native chat projection")
     print("PASS \(scenario.rawValue): original text/identity or explicit read error; writes=0")
