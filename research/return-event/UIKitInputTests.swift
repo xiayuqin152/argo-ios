@@ -64,7 +64,8 @@ import XCTest
             XCTAssertEqual(view.text, "")
             for modifiers in [UIKeyModifierFlags.shift, .alternate, [.shift, .alternate]] {
                 let command = try XCTUnwrap(view.keyCommands?.first { $0.modifierFlags == modifiers })
-                XCTAssertTrue(UIApplication.shared.sendAction(command.action, to: view, from: command, for: nil))
+                let action = try XCTUnwrap(command.action)
+                XCTAssertTrue(UIApplication.shared.sendAction(action, to: view, from: command, for: nil))
             }
             XCTAssertEqual(view.text, "\n\n\n")
             XCTAssertEqual(sent.count, 1)
