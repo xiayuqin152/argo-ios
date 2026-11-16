@@ -43,6 +43,20 @@ They must not automatically resend a source item. This requires a host containin
 `dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent fix; running-host
 support still needs separate validation.
 
+Sources may also be ordinary PTY `deliveryUnknown` records with no `native`
+marker. They are linked only when both source and resumed runs have persisted
+absolute native-home evidence and the original `target` matches exactly;
+missing identity/home evidence is not inferred from the current CLI. Their
+history is read-only and uses the original run and target, not a sendable item
+in the resumed queue. Removing one uses `DELETE
+/api/agents/{sourceRun}/queue/{id}?bounded=1` with no `/native` suffix and no
+body. Native handoffs keep the separate `/native` route. Removal does not
+retract possible input or make the original attempt delivered; it remains
+`delivered:false` and is not resent. A removal response must be a bounded,
+decodable queue with the original run and queue identity; otherwise its outcome
+is unknown and must not be replayed. This ordinary-PTY source contract requires
+`eb122254d20af1f36a8b32df3be6d9cb5f82fc4d` or the equivalent fix.
+
 When only some sources are readable, queue responses and Agent cards may include
 an optional `nativeSourcesError` string. This is a partial source-read diagnostic,
 not an error for the current queue or receipt. Current state, successful
@@ -54,13 +68,16 @@ no diagnostic was provided, not that history is complete. Current-queue
 permission, version and read failures, and source full-item/hide failures, keep
 their original error responses instead of becoming this diagnostic. Reporting
 it requires `e078c23ee4d44fe5eddeea0d41ee04e6fc0aebc7` or the equivalent fix.
-No ordinary-PTY source or recovery extension is defined by this contract.
+The diagnostic concerns only source readability, not whether an original target
+is valid history. A source run's current identity may change while the original
+`target` continues to identify that history; the two must not be conflated.
 
 | Capability | Client request | Required host contract |
 | --- | --- | --- |
 | Queue preview | `GET /api/agents/{run}/queue?bounded=1` | Root `bounded:true`, `byteLimit:8388608`; the entire encoded JSON body, including its final newline, is strictly smaller than 8,388,608 bytes (8 MiB). |
 | Send receipt | `POST /api/agents/{run}/queue?bounded=1` | The same root markers and byte bound; the original `X-Loom-Attempt` retains its idempotency semantics. An old-style success receipt is treated as unknown delivery and requires readback. |
 | Native hide receipt | `DELETE /api/agents/{run}/queue/{id}/native?bounded=1` | A bounded queue response under the same byte bound. iOS ignores this response body; the request hides the record only and is not automatically replayed. |
+| Ordinary PTY unknown removal | `DELETE /api/agents/{sourceRun}/queue/{id}?bounded=1` | No `/native` suffix and no body. Use the original run and item ID; removal does not retract possible input or change the original unknown/`delivered:false` attempt. A valid bounded queue with the original run and identity is required before treating the removal as confirmed. |
 | Preview fields | Queue views and receipts above | Preserve all `items`/`later`, IDs, targets, native states and counts. Queue `ws` and current `identity` are inside `queue` in a receipt. Each object's optional `truncatedFields` marks shortened display strings; previews never supply text for sends or overwrites. |
 | Complete item | `GET /api/agents/{run}/queue/{id}` | Read-only, no `bounded` mode: complete `item` with original `id` and optional original `target`, plus current `run`/`ws`/`identity`/`state`/`ended`/`later`; no truncation, body strictly smaller than 16,777,216 bytes (16 MiB). Missing or hidden items return 404. Reading never sends, retries, edits or cancels a message. |
 

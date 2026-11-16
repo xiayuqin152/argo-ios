@@ -114,6 +114,30 @@ current send tasks and are not automatically resent. This extension requires a
 host containing `dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent
 fix, rather than merely an older queue-wire-v2 host.
 
+## Ordinary PTY unknown sources
+
+Sources can also be ordinary PTY records where `native` is absent and
+`deliveryUnknown` is nonempty. They are linked only when both the source and
+resumed runs have persisted absolute native-home evidence and the original
+`target` matches exactly. Missing identity/home evidence is not linked or
+inferred from the current CLI environment or profile. Aggregated history counts
+include these sources; reading the original run directly keeps its original
+queue semantics.
+
+These records remain read-only history with the original run and target, never a
+sendable item in the resumed queue. Remove one with `DELETE
+/api/agents/{sourceRun}/queue/{id}?bounded=1`, with no `/native` suffix, request
+body or new attempt key. Native handoffs use the separate `/native` endpoint.
+Removal only hides the Argo record and does not retract possible PTY input. The
+original attempt stays unknown/`delivered:false`; do not resend it, create chat
+records or deduplicate by text.
+
+A removal response must be a bounded decodable queue whose `run` and queue
+`identity.run` are the original source run. Missing, malformed or mismatched
+responses leave the removal outcome unknown and must not be replayed. This
+ordinary-PTY source contract requires
+`eb122254d20af1f36a8b32df3be6d9cb5f82fc4d` or the equivalent fix.
+
 ## Source-read diagnostics
 
 Queue responses and Agent cards may add an optional `nativeSourcesError` string
@@ -129,5 +153,7 @@ Current-queue permission, version and read failures, and source full-item/hide
 failures, keep their original error responses. Cancellation stops subsequent
 source scans; synchronous lock waits and reads already in progress are not
 guaranteed to interrupt immediately. This diagnostic requires
-`e078c23ee4d44fe5eddeea0d41ee04e6fc0aebc7` or the equivalent fix. No
-ordinary-PTY source or recovery extension is defined here.
+`e078c23ee4d44fe5eddeea0d41ee04e6fc0aebc7` or the equivalent fix. It concerns
+only source readability, not target validity: a source run's current identity
+may change while its original `target` remains the identity of that historical
+record.
