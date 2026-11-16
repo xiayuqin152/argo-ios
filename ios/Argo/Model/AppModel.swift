@@ -58,6 +58,7 @@ final class AppModel {
     @ObservationIgnored private var connection: ArgoConnection?
     @ObservationIgnored private var active = false
     @ObservationIgnored private var hostEpoch = UUID()
+    @ObservationIgnored private var hostListEpoch = UUID()
     @ObservationIgnored private var listEpoch = UUID()
     @ObservationIgnored private var chatEpoch = UUID()
     @ObservationIgnored private var workspaceEpoch = UUID()
@@ -120,21 +121,34 @@ final class AppModel {
         }
     }
 
+    private func synchronizeHosts() async throws {
+        while true {
+            let epoch = hostListEpoch
+            let saved = try await store.hosts()
+            // A completed mutation invalidates snapshots already in flight.
+            guard epoch == hostListEpoch else { continue }
+            hosts = saved
+            return
+        }
+    }
+
     func loadHosts() async {
         loadingHosts = true
         defer { loadingHosts = false }
         do {
-            hosts = try await store.hosts()
+            try await synchronizeHosts()
             hostProblem = nil
             if !hosts.contains(where: { $0.id == hostID }) { selectHost(hosts.first?.id) }
         } catch { hostProblem = L10n.error(error) }
     }
 
     func removeHost(_ id: UUID) async throws {
+        pairTask?.cancel()
         try await unregisterNotifications?(id)
         // Preserve UI state until both metadata and credential removal succeed.
         // A failed credential deletion restores metadata or reports its rollback.
         try await store.remove(id)
+        hostListEpoch = UUID()
         newSession.forgetHost(id)
         hosts.removeAll { $0.id == id }
         if hostID == id { selectHost(hosts.first?.id) }
@@ -1505,10 +1519,10 @@ final class AppModel {
                     try Task.checkCancellation()
                 }
                 let paired = try await store.pair(code: code, deviceName: deviceName, name: name)
+                hostListEpoch = UUID()
+                // Persistence owns the list; cancellation only stops selection/connection.
+                try await synchronizeHosts()
                 try Task.checkCancellation()
-                let updatedHosts = try await store.hosts()
-                try Task.checkCancellation()
-                hosts = updatedHosts
                 pairedHostID = paired.id
                 if hostID == paired.id { reconnect() } else { selectHost(paired.id) }
             } catch is CancellationError {

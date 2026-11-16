@@ -12,14 +12,39 @@ private let originalText = "SYNTHETIC_NOTIFICATION_PENDING\n  原文🙂  "
 private let unknownReason = "synthetic notification pending result unknown"
 private enum Scenario: String {
     case pushB, sameHostRun, userB, forget, repair, reconnect, pairFailed, pairRollback, newerRoute, missingAgent
+    case pairCancelEmpty, pairCancelExisting, pairCancelRepair, pairBackgroundEmpty, pairBackgroundExisting
+    case pairCancelBeforeSave, pairCancelLate, pairBackgroundLate, pairDuplicate, pairForgetLate, pairForgetDuringRestore, pairNewFailed
+
+    var checksPairingLifecycle: Bool {
+        switch self {
+        case .pairCancelEmpty, .pairCancelExisting, .pairCancelRepair, .pairBackgroundEmpty, .pairBackgroundExisting,
+             .pairCancelBeforeSave, .pairCancelLate, .pairBackgroundLate, .pairDuplicate, .pairForgetLate,
+             .pairForgetDuringRestore, .pairNewFailed: true
+        default: false
+        }
+    }
 }
 
 private actor Pairing {
     private var repaired = false
     private var failing = false
+    private var cancelPair = false
+    private var holdPair = false
+    private var pending: CheckedContinuation<Void, Never>?
+    private(set) var calls = 0
+    var waiting: Bool { pending != nil }
+    func cancelNextPair() { cancelPair = true }
+    func holdNextPair() { holdPair = true }
+    func releasePair() { pending?.resume(); pending = nil }
     func replaceA() { repaired = true }
     func failA() { failing = true }
-    func pair(_ code: PairingCode) throws -> GatewayCredential {
+    func pair(_ code: PairingCode) async throws -> GatewayCredential {
+        calls += 1
+        if holdPair {
+            holdPair = false
+            await withCheckedContinuation { pending = $0 }
+        }
+        if cancelPair { cancelPair = false; withUnsafeCurrentTask { $0?.cancel() } }
         let a = code.host == "a.fixture.invalid"
         if a && failing { throw Failure("Synthetic pairing failed.") }
         return GatewayCredential(device: a ? (repaired ? "fixture-A-v2" : "fixture-A-v1") : "fixture-B-v1",
@@ -31,10 +56,28 @@ private final class Tokens: DeviceTokenStoring, @unchecked Sendable {
     private let backing = InMemoryDeviceTokens()
     private let lock = NSLock()
     private var failSave = false
+    private var cancelSave = false
+    private var holdSave = false
+    private var saveWaiting = false
+    private let release = DispatchSemaphore(value: 0)
+    func holdNextSave() { lock.lock(); defer { lock.unlock() }; holdSave = true }
+    var waiting: Bool { lock.lock(); defer { lock.unlock() }; return saveWaiting }
+    func releaseSave() { release.signal() }
+    func cancelNextSave() { lock.lock(); defer { lock.unlock() }; cancelSave = true }
     func failNextSave() { lock.lock(); defer { lock.unlock() }; failSave = true }
     func save(_ token: String, for host: UUID) throws {
         lock.lock(); defer { lock.unlock() }
         try backing.save(token, for: host)
+        // Cancel the real pairing Task inside the synchronous persistence boundary.
+        if cancelSave { cancelSave = false; withUnsafeCurrentTask { $0?.cancel() } }
+        if holdSave {
+            holdSave = false
+            saveWaiting = true
+            lock.unlock()
+            release.wait()
+            lock.lock()
+            saveWaiting = false
+        }
         // Fail after the synthetic write so ArgoHostStore must restore the old token.
         if failSave { failSave = false; throw Failure("Synthetic credential save failed.") }
     }
@@ -385,10 +428,129 @@ private struct Transport: ArgoHTTPTransport {
     print("PASS \(scenario.rawValue): exact notification host/run ownership, original unknown isolated, cancelled full ignored, messagePOST A=1/B=0")
 }
 
+// Reuses this harness's real AppModel/ArgoHostStore and synthetic token/HTTP boundaries.
+@MainActor private func checkPairingLifecycle(_ scenario: Scenario) async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("argo-pair-cancel-" + UUID().uuidString)
+    let tokens = Tokens(), pairing = Pairing()
+    let store = ArgoHostStore(fileURL: directory.appendingPathComponent("hosts.json"), tokens: tokens) { code, _ in
+        try await pairing.pair(code)
+    }
+    let connections = ConnectionCalls()
+    let network = Network(terminalUnknown: false)
+    let model = AppModel(store: store, pendingCreations: MemoryCreations()) { host, credential in
+        connections.record(host.id)
+        return ArgoConnection(host: host, transport: Transport(network: network, host: host, credential: credential))
+    }
+    defer { tokens.releaseSave(); model.setActive(false); try? FileManager.default.removeItem(at: directory) }
+    let hasExisting = [.pairCancelExisting, .pairCancelRepair, .pairBackgroundExisting, .pairForgetLate, .pairForgetDuringRestore].contains(scenario)
+    let existing = hasExisting ? try await store.pair(code: Fixture.code("a.fixture.invalid"), deviceName: "synthetic") : nil
+    await model.loadHosts()
+    model.setActive(true)
+    if existing != nil { try await eventually("Original host connected") { model.status.isConnected } }
+    let selected = model.hostID, opened = connections.count
+    let oldCredential = try existing.flatMap { try tokens.read($0.id) }
+    let calls = await pairing.calls
+    let isRepair = [.pairCancelRepair, .pairForgetLate, .pairForgetDuringRestore].contains(scenario)
+    let address = isRepair || scenario == .pairNewFailed ? "a.fixture.invalid" : "new.fixture.invalid"
+    if isRepair { await pairing.replaceA() }
+    if scenario == .pairNewFailed { await pairing.failA() }
+    if scenario == .pairCancelBeforeSave { await pairing.cancelNextPair() }
+    let heldPair = [.pairCancelLate, .pairBackgroundLate, .pairForgetLate].contains(scenario)
+    if heldPair { await pairing.holdNextPair() }
+    let heldSave = [.pairBackgroundEmpty, .pairBackgroundExisting, .pairDuplicate].contains(scenario)
+    if heldSave { tokens.holdNextSave() }
+    if [.pairCancelEmpty, .pairCancelExisting, .pairCancelRepair, .pairForgetDuringRestore].contains(scenario) { tokens.cancelNextSave() }
+    var restoration: CheckedContinuation<Void, Never>?
+    if scenario == .pairForgetDuringRestore {
+        model.restoreNotificationsAfterPairing = { _ in await withCheckedContinuation { restoration = $0 } }
+    }
+    let code = Fixture.code(address, fingerprint: 4)
+    model.pair(code: code, name: "new synthetic", deviceName: "synthetic")
+    guard let pairingTask = task(model, label: "pairTask") else { throw Failure("No production pairing Task") }
+    if heldPair {
+        try await eventually("Uncancellable pairing response held") { await pairing.waiting }
+        if scenario == .pairForgetLate { try await model.removeHost(existing!.id) }
+        else if scenario == .pairBackgroundLate { model.setActive(false) }
+        else { model.cancelPairing() }
+        await pairing.releasePair()
+    }
+    if heldSave {
+        try await eventually("Synchronous credential save held") { tokens.waiting }
+        if scenario == .pairDuplicate { model.pair(code: code, name: "duplicate", deviceName: "synthetic") }
+        else { model.setActive(false) }
+        tokens.releaseSave()
+    }
+    if scenario == .pairForgetDuringRestore {
+        try await eventually("Cancelled re-pair notification restoration held") { restoration != nil }
+        try await model.removeHost(existing!.id)
+        restoration?.resume()
+    }
+    await pairingTask.value
+    let saved = try await store.hosts()
+    let completedCalls = await pairing.calls
+    try require(completedCalls == calls + 1, "Pairing retried or duplicate submission reached the pairer")
+    if [.pairCancelBeforeSave, .pairCancelLate, .pairBackgroundLate, .pairNewFailed].contains(scenario) {
+        try require(saved.isEmpty && model.hosts.isEmpty && model.hostID == nil && model.pairedHostID == nil &&
+                    connections.count == 0, "Uncommitted pairing changed hosts, selection or connections")
+        try require(scenario == .pairNewFailed ? model.pairingProblem == "Synthetic pairing failed." : model.pairingProblem == nil,
+                    "Failed/cancelled pairing reported the wrong outcome")
+        print("PASS \(scenario.rawValue): no host/token committed; no selection, connection or retry")
+        return
+    }
+    if [.pairForgetLate, .pairForgetDuringRestore].contains(scenario) {
+        print("OBSERVED \(scenario.rawValue): persisted=\(saved.count), visible=\(model.hosts.count), selected=\(model.hostID?.uuidString ?? "nil")")
+        try require(saved.isEmpty && model.hosts.isEmpty && model.hostID == nil && model.pairedHostID == nil &&
+                    (try tokens.read(existing!.id)) == nil,
+                    "Late pairing revived a forgotten host or credential")
+        print("PASS \(scenario.rawValue): late pairing/restoration cannot revive forgotten host/token")
+        return
+    }
+    guard let added = saved.first(where: { $0.address == address }) else { throw Failure("Fixture did not commit the host") }
+    let credential = try await store.credential(for: added)
+    if scenario == .pairDuplicate {
+        try await eventually("Single successful pairing connected") { model.status.isConnected }
+        try require(saved.count == 1 && model.hosts == saved && model.hostID == added.id && model.pairedHostID == added.id &&
+                    connections.count(for: added.id) == 1, "Duplicate pairing changed success or created extra hosts/connections")
+        print("PASS pairDuplicate: one exchange, one committed host, one selection and one connection")
+        return
+    }
+    try require(pairingTask.isCancelled && model.hostID == selected && model.pairedHostID == nil &&
+                model.pairingProblem == nil && connections.count == opened,
+                "Cancellation changed selection, reported success/error, or connected the new host")
+    if scenario == .pairCancelRepair {
+        try require(added.id == existing?.id && added.deviceID == "fixture-A-v2" &&
+                    credential.token != oldCredential, "Cancelled committed re-pair lost the replacement credential")
+    } else if let existing {
+        try require(try tokens.read(existing.id) == oldCredential, "Cancellation changed the existing token")
+    }
+    let visibleBeforeForeground = model.hosts == saved
+    model.setActive(false)
+    model.setActive(true)
+    if existing != nil { try await eventually("Original selection reconnected") { model.status.isConnected } }
+    print("OBSERVED \(scenario.rawValue): persisted=\(saved.count), visible=\(model.hosts.count), selectedPreserved=\(model.hostID == selected), newHostConnections=\(isRepair ? 0 : connections.count(for: added.id))")
+    try require(visibleBeforeForeground && model.hosts == saved,
+                "Committed host missing from AppModel hosts after cancellation and foreground")
+    try require(model.hostID == selected && model.pairedHostID == nil &&
+                (isRepair || connections.count(for: added.id) == 0),
+                "Foreground selected or connected the cancelled pairing")
+    print("PASS \(scenario.rawValue): committed hosts visible; cancellation/foreground preserve selection, credentials and connection ownership")
+}
+
+private final class ConnectionCalls: @unchecked Sendable {
+    private let lock = NSLock()
+    private var opened: [UUID] = []
+    func record(_ id: UUID) { lock.lock(); defer { lock.unlock() }; opened.append(id) }
+    var count: Int { lock.lock(); defer { lock.unlock() }; return opened.count }
+    func count(for id: UUID) -> Int { lock.lock(); defer { lock.unlock() }; return opened.filter { $0 == id }.count }
+}
+
 @main private struct NavigationCheck {
     @MainActor static func main() async {
         guard let argument = CommandLine.arguments.dropFirst().first, let scenario = Scenario(rawValue: argument) else { print("FAIL missing scenario"); exit(2) }
-        do { try await check(scenario) }
+        do {
+            if scenario.checksPairingLifecycle { try await checkPairingLifecycle(scenario) }
+            else { try await check(scenario) }
+        }
         catch { print("FAIL \(scenario.rawValue): \(error)"); exit(1) }
     }
 }
