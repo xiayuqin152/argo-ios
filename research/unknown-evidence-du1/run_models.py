@@ -4,6 +4,10 @@ import argparse
 from pathlib import Path
 import shutil
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ios/scripts"))
+from notification_test_support import write_notification_sources
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("fixture", type=Path)
@@ -22,6 +26,7 @@ assert objects, "Build the actual Core/API package first"
 sources = [Path("ios/Argo/Model") / (name + ".swift") for name in (
     "AppModel", "AgentSession", "AttachmentDraft", "ConversationState", "ModelRecoveryState", "NewSessionState"
 )] + [Path("ios/Argo/Support/L10n.swift")]
+sources.extend(write_notification_sources(a.output, lambda path: Path(path).read_text()))
 binary = a.output / "model-check"
 with (a.output / "compile.log").open("w") as log:
     subprocess.run([swiftc, "-swift-version", "6", "-parse-as-library", "-j", "2", "-I", str(core / "Modules"),

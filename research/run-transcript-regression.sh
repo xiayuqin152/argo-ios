@@ -32,11 +32,21 @@ done
 package=ios/Packages/ArgoMobileKit
 "$swift" build --package-path "$package" --jobs 2
 bin_path=$("$swift" build --package-path "$package" --show-bin-path)
+notification_dir=$(mktemp -d "${TMPDIR:-/tmp}/argo-transcript-notifications.XXXXXX")
+trap 'rm -rf -- "$notification_dir"' EXIT
+python3 - "$notification_dir" <<'PY'
+from pathlib import Path
+import sys
+sys.path.insert(0, "ios/scripts")
+from notification_test_support import write_notification_sources
+write_notification_sources(Path(sys.argv[1]), lambda path: Path(path).read_text())
+PY
 "$swiftc" -swift-version 6 -j 2 -parse-as-library -I "$bin_path/Modules" \
   ios/Argo/Model/AgentSession.swift ios/Argo/Model/AppModel.swift \
   ios/Argo/Model/AttachmentDraft.swift ios/Argo/Model/ConversationState.swift \
   ios/Argo/Model/ModelRecoveryState.swift ios/Argo/Model/NewSessionState.swift \
   ios/Argo/Support/L10n.swift "$package/Tests/ArgoMobileKitTests/Support.swift" \
+  "$notification_dir/PhoneNotifications.swift" "$notification_dir/NotificationPlatform.swift" \
   research/TranscriptRegression.swift "$bin_path"/ArgoMobileKit.build/*.swift.o \
   -o research/transcript-regression
 research/transcript-regression

@@ -10,6 +10,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ios/scripts"))
+from notification_test_support import write_notification_sources
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +58,7 @@ def main():
             path = build / Path(relative).name
             path.write_text(text)
             inputs.append(str(path))
+        inputs.extend(map(str, write_notification_sources(build, read)))
         badges = block(read("ios/Argo/Views/Chats/ChatsView.swift"), "private var filterItems:")
         projection = build / "BadgeProjection.swift"
         projection.write_text("""

@@ -13,6 +13,8 @@ import re
 import shutil
 import subprocess
 
+from notification_test_support import notification_sources
+
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ["pushB", "sameHostRun", "userB", "forget", "repair", "reconnect", "pairFailed", "pairRollback", "newerRoute", "missingAgent", "pairCancelEmpty", "pairCancelExisting",
          "pairCancelRepair", "pairBackgroundEmpty", "pairBackgroundExisting", "pairCancelBeforeSave", "pairCancelLate",
@@ -64,12 +66,7 @@ def main():
     sources = [save(name + ".swift", source(f"ios/Argo/Model/{name}.swift")) for name in
                ["AppModel", "AgentSession", "AttachmentDraft", "ConversationState", "ModelRecoveryState", "NewSessionState"]]
     sources.append(save("L10n.swift", source("ios/Argo/Support/L10n.swift")))
-    phone = source("ios/Argo/Notifications/PhoneNotifications.swift")
-    phone = phone.replace("import UIKit\n", "").replace("import UserNotifications\n", "")
-    phone = phone.replace("UserDefaults.standard", "NotificationTestPlatform.defaults").replace("Bundle.main", "NotificationTestPlatform.bundle")
-    sources.append(save("PhoneNotifications.swift", phone))
-    # Reuse the published in-memory OS adapter; no registration logic is replaced.
-    sources.append(save("NotificationPlatform.swift", source("research/repair-notifications/NotificationPlatform.swift")))
+    sources.extend(notification_sources(source, save))
     root_view = source("ios/Argo/Views/RootView.swift")
     start = root_view.index("    private func openNotification() {")
     end = root_view.index("\n    private var compactHosts:", start)

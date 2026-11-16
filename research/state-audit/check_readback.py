@@ -10,6 +10,10 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ios/scripts"))
+from notification_test_support import write_notification_sources
 
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -35,6 +39,7 @@ for source in support:
         sources.append(target)
     else:
         sources.append(source)
+sources.extend(write_notification_sources(args.output, lambda path: Path(path).read_text()))
 if old_compiler:
     print("Linux Swift 6.0: temporary support copies omit type-level nonisolated; AppModel is unchanged.", flush=True)
 core = args.core_build / "debug"

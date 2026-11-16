@@ -4,6 +4,10 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ios/scripts"))
+from notification_test_support import write_notification_sources
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--swiftc", required=True)
@@ -23,6 +27,7 @@ for path in [Path("ios/Argo/Model") / (name + ".swift") for name in (
     target = a.output / path.name
     target.write_text(text)
     sources.append(str(target))
+sources += list(map(str, write_notification_sources(a.output, lambda path: Path(path).read_text())))
 core = a.core_build / "debug"
 objects = sorted((core / "ArgoMobileKit.build").glob("*.o"))
 assert objects, "Build actual ArgoMobileKit before running this check"
