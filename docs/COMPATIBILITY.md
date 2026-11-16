@@ -1,92 +1,74 @@
 # Host compatibility
 
-Argo MobileKit uses the authenticated Argo gateway (`proto=1`, HTTP `api=1`).
-Conversation reading additionally requires opt-in bounded native chat responses:
-`bounded:true`, `byteLimit:1048576`, native identity checks, block cursors and
-raw-source `fileRefs`. These requirements are checked in the client; a legacy
-whole-record chat response is not accepted as a bounded page. The host must also
-carry the matching raw IPv6-zone and Unicode DNS pairing normalization.
+This repository contains the iOS client for iPhone and iPad. Connect it to an
+Argo host with the mobile capabilities below; the host is installed and upgraded
+separately.
 
-The verified host compatibility baseline is
-`aca842c00138878244d1f8f928723b96d9e17886` in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). It includes bounded chat/fileRefs, pairing normalization, phone notification registration/APNs support, bounded queue/full-item reads, persistent attempts, restored native sources and source-read diagnostics. PR#44 still awaits desktop `unknown` and CS1 fixes; [iOS PR#3](https://github.com/xiayuqin152/argo-ios/pull/3) has a separate notification-route repair pending. The running service has not been deployed from this source; a released minimum host version has not been specified. No server source or private server history is included in this phone client repository.
+The checked backend candidate is `6d189c72eacdc2688c8fa788b2c6af13e2d38201`
+in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). It remains a
+candidate pending final integration; the final verified host revision will be
+recorded before distribution. A minimum released host version has not been
+specified, and the running service has not been deployed from this candidate.
+The iOS source candidate is tracked in [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3).
 
-This client additionally requires [queue-wire v2](../research/queue-wire-v2/queue-wire-v2.md).
-Upgrade the host code to provide bounded queue reads and send/hide receipts,
-plus read-only full-item reads alongside the existing contracts. The verified
-baseline includes queue-wire v2; running-host support still needs validation.
-For the final combined source, record the verified backend SHA and the matching
-iOS cloud build result.
+| Feature | Required host capability and phone behavior |
+| --- | --- |
+| Pairing | Argo pairing codes, device credential authentication and an address reachable from the phone. Raw IPv6-zone addresses and Unicode DNS names use the same normalization on both sides. |
+| Conversations | Bounded native chat reads, history cursors and attachment references. The phone displays the Agent conversation returned by the host. |
+| Replies | Connected managed sessions accept messages and supported Agent answers with delivery receipts. Historical, manual and unattached sessions remain read only. |
+| Queued messages | Bounded queue previews and receipts, plus full-message reads by the original item ID. Open or copy full text when a preview is shortened. |
+| Earlier handoffs | Read-only records from the original session, kept separate from the current send queue. Source-read errors show a warning without discarding readable messages or receipts. |
+| Phone alerts | Paired-device notification registration and the host's own APNs configuration. Tapping an alert opens its host and session without sending a message. |
 
-Queue previews may shorten display text; viewing or copying incomplete content
-first reads the full item by its original ID. Native `accepted` acknowledges a
-CLI handoff; turn completion is read from the native conversation. Native
-`unknown` retains an uncertain result. Both states allow view/copy and explicit
-hide only; hiding a record leaves the CLI input unchanged. Unknown sends retain
-their evidence for readback and are never automatically resent.
+## Messages sent from the phone
 
-A resumed native session may also provide optional `nativeSources` entries of the
-form `{sourceRun,target,nativeHistory}`. Each entry references older read-only
-handoffs with the same workspace, engine, native home and native session, and
-keeps the original terminal-agent identity. The reference carries no item body.
-Queue and Agent-card `nativeHistory` counts include these sources; `items`,
-`later` and `pending` still describe only the current run. A missing or null
-`nativeSources` field means the host did not provide this capability, not that
-no earlier records exist. Consuming clients must keep the sources separate from
-the current send queue and use the original `sourceRun` queue, full-item and
-native-hide APIs with the original item ID, target and revision/owner checks.
-They must not automatically resend a source item. This requires a host containing
-`dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent fix; running-host
-support still needs separate validation.
+Phone-sent text remains visible in **Delivery Receipts** with its sending,
+queued, delivered or unknown status. When the host reads the message back from
+the Agent's native conversation history, it appears in that conversation.
+A queue acknowledgement or native handoff receipt does not mean the Agent has
+finished its turn.
 
-Sources may also be ordinary PTY `deliveryUnknown` records with no `native`
-marker. They are linked only when both source and resumed runs have persisted
-absolute native-home evidence and the original `target` matches exactly;
-missing identity/home evidence is not inferred from the current CLI. Their
-history is read-only and uses the original run and target, not a sendable item
-in the resumed queue. Removing one uses `DELETE
-/api/agents/{sourceRun}/queue/{id}?bounded=1` with no `/native` suffix and no
-body. Native handoffs keep the separate `/native` route. Removal does not
-retract possible input or make the original attempt delivered; it remains
-`delivered:false` and is not resent. A removal response must be a bounded,
-decodable queue with the original run and queue identity; otherwise its outcome
-is unknown and must not be replayed. This ordinary-PTY source contract requires
-`eb122254d20af1f36a8b32df3be6d9cb5f82fc4d` or the equivalent fix.
+An unknown result keeps its warning, including when matching text appears in
+the conversation. Refresh the host state before deciding what to do next.
+The app does not automatically resend an unknown message or repeat a send when
+it returns to the foreground.
 
-When only some sources are readable, queue responses and Agent cards may include
-an optional `nativeSourcesError` string. This is a partial source-read diagnostic,
-not an error for the current queue or receipt. Current state, successful
-item/attempt receipts, readable sources and their counts remain valid, and the
-current `notice` is not replaced. Those counts can be incomplete, so
-`nativeHistory` is not a complete-total guarantee. A source error never means
-that no history exists, even when the count is zero. A missing error field means
-no diagnostic was provided, not that history is complete. Current-queue
-permission, version and read failures, and source full-item/hide failures, keep
-their original error responses instead of becoming this diagnostic. Reporting
-it requires `e078c23ee4d44fe5eddeea0d41ee04e6fc0aebc7` or the equivalent fix.
-The diagnostic concerns only source readability, not whether an original target
-is valid history. A source run's current identity may change while the original
-`target` continues to identify that history; the two must not be conflated.
+## Queues and earlier records
 
-| Capability | Client request | Required host contract |
-| --- | --- | --- |
-| Queue preview | `GET /api/agents/{run}/queue?bounded=1` | Root `bounded:true`, `byteLimit:8388608`; the entire encoded JSON body, including its final newline, is strictly smaller than 8,388,608 bytes (8 MiB). |
-| Send receipt | `POST /api/agents/{run}/queue?bounded=1` | The same root markers and byte bound; the original `X-Loom-Attempt` retains its idempotency semantics. An old-style success receipt is treated as unknown delivery and requires readback. |
-| Native hide receipt | `DELETE /api/agents/{run}/queue/{id}/native?bounded=1` | A bounded queue response under the same byte bound. iOS ignores this response body; the request hides the record only and is not automatically replayed. |
-| Ordinary PTY unknown removal | `DELETE /api/agents/{sourceRun}/queue/{id}?bounded=1` | No `/native` suffix and no body. Use the original run and item ID; removal does not retract possible input or change the original unknown/`delivered:false` attempt. A valid bounded queue with the original run and identity is required before treating the removal as confirmed. |
-| Preview fields | Queue views and receipts above | Preserve all `items`/`later`, IDs, targets, native states and counts. Queue `ws` and current `identity` are inside `queue` in a receipt. Each object's optional `truncatedFields` marks shortened display strings; previews never supply text for sends or overwrites. |
-| Complete item | `GET /api/agents/{run}/queue/{id}` | Read-only, no `bounded` mode: complete `item` with original `id` and optional original `target`, plus current `run`/`ws`/`identity`/`state`/`ended`/`later`; no truncation, body strictly smaller than 16,777,216 bytes (16 MiB). Missing or hidden items return 404. Reading never sends, retries, edits or cancels a message. |
+Native accepted or unknown handoffs and ordinary terminal sends with unknown
+delivery are read only. They can be viewed, copied or explicitly hidden/removed;
+removal does not retract possible input or turn an unknown result into success.
+The app does not rebuild these records as messages to send again.
 
-Queue/reply, interrupt, exact displayed-question seen acknowledgement, attachment
-upload/download and Claude model recovery use the existing authenticated APIs.
-Unknown delivery/upload/model actions retain evidence and require explicit
-readback; foregrounding does not automatically repeat a POST. Manual sessions
-remain read-only. Local attachment previews and new remote reads have separate
-ownership and authorization checks.
+Earlier records retain their original host, session and message ownership. They
+are opened from the original source rather than the resumed session's send
+queue. If some earlier records cannot be read, the app shows a warning while
+keeping current messages and readable receipts available. Counts can be
+incomplete in that state.
 
-Phone Tailcat transport is not connected. Notification registration, credential-preserving removal and GET-only tap routing are implemented. The host provides PUT/DELETE /api/notify/device and requires its own APNs configuration. Debug uses provider sandbox and entitlement development; Release uses production for both. APNs/background delivery and actual signing remain unvalidated.
-An unsigned IPA cannot be installed directly; device installation requires an
+## Notifications and installation
+
+Enable alerts separately for each paired host. The app checks the current
+pairing and notification registration before opening an alert's host/session;
+alerts from disabled or replaced registrations are ignored. Alerts contain
+status only. See [notification setup](phone-notifications.md) for permissions,
+signing and APNs environments. APNs delivery and device background behavior
+still require device validation.
+
+An unsigned IPA cannot be installed directly. Device installation needs an
 Apple Developer account, a suitable certificate and provisioning profile.
-Current Linux checks cover Core and production model state. Final-revision iOS
-SDK/SwiftUI/UIKit/resource checks run in GitHub's standard macOS cloud runner.
-Real pairing/replies, camera, IME/paste, Photos/Quick Look, accessibility and
-device notification behavior require their own validation.
+The [build and validation guide](../ios/README.md#validation-status) binds cloud
+builds and artifacts to their exact iOS source revision. Later source changes
+need their own SDK, UIKit and package validation.
+
+## Host integration reference
+
+The client uses gateway `proto=1` and HTTP `api=1`. Conversation reads require
+`bounded:true`, `byteLimit:1048576`, native identity checks, history cursors and
+raw-source `fileRefs`. Queue previews and send/hide receipts use the
+[queue-wire v2 contract](../research/queue-wire-v2/queue-wire-v2.md), including
+bounded responses and full-item reads. Notification registration uses
+`PUT/DELETE /api/notify/device` with the paired device's credentials.
+
+Real pairing/replies, camera, IME/paste, Photos/Quick Look, accessibility,
+signing and device notification behavior remain separate validation steps.

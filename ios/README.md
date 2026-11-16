@@ -1,6 +1,6 @@
 # 构建与安装 Argo iOS
 
-App 面向 iOS 26+ 的 iPhone / iPad，使用 Swift 6；产品、target、scheme 和显示名为 `Argo`，Bundle ID 为 `dev.argo.ios`。
+本仓库仅提供 iOS 客户端。App 面向 iOS 26+ 的 iPhone / iPad，使用 Swift 6；产品、target、scheme 和显示名为 `Argo`，Bundle ID 为 `dev.argo.ios`。Argo 主机需单独运行。
 
 ## 获取构建产物
 
@@ -36,19 +36,19 @@ xcodebuild -jobs 2 \
 <a id="host-compatibility"></a>
 ## 主机兼容要求
 
-兼容性按主机实际能力判断，目前尚未指定包含这些增量的已发布主机版本，也不提供新的服务端安装命令。
+兼容性按主机实际能力判断，目前尚未指定已发布的最低主机版本。配对前请确认主机具备下列能力；本仓库不包含或部署服务端。
 
-| 能力 | 已核对的契约 |
+| 能力 | 主机要求与手机体验 |
 | --- | --- |
-| 网关与接口 | gateway proto=1、HTTP api=1 |
-| 会话阅读 | 客户端请求 `GET /api/terminals/{id}/chat?bounded=1`；响应必须声明 `bounded: true` 和 `byteLimit: 1048576`，支持 `recordOffset:blockIndex` 形式的 before/after/around 游标及 fileRefs |
-| 会话回复 | 当前已接通的 managed 会话具有可写身份和主机回执；历史、manual 或未接入会话只读 |
-| 队列预览与全文 | 新版客户端需要升级 Argo 后端以支持[queue wire v2](../research/queue-wire-v2/queue-wire-v2.md)：队列读取与发送回执请求 `bounded=1`，响应声明 `bounded: true` 和 `byteLimit: 8388608`；按原 item ID 读取 `GET /api/agents/{run}/queue/{id}` 获得完整原文 |
-| 手机提醒 | 主机提供以已配对设备凭证认证的 `PUT/DELETE /api/notify/device`，并配置自己的 APNs |
+| 配对与连接 | 支持 Argo 配对、设备凭证认证，以及手机可访问的主机地址 |
+| 会话阅读 | 支持有界会话读取、历史翻页和附件引用；手机发送的消息随主机读回的 Agent 会话记录显示 |
+| 会话回复 | 已接通的 managed 会话支持发送和回执；历史、manual 或未接入会话只读 |
+| 队列与早先记录 | 支持队列预览、按原消息读取全文和早先交接记录；结果未知时保留回执，不自动重发 |
+| 手机提醒 | 支持已配对设备的通知注册，并配置主机自己的 APNs |
 
-已核验的主机兼容基线为 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44) 的 `aca842c00138878244d1f8f928723b96d9e17886`，包含上述聊天、配对、通知、队列全文、持久 attempt、恢复来源及来源错误诊断契约。PR#44 的桌面端 `unknown` 和 CS1 修复仍待收尾；[iOS PR#3](https://github.com/xiayuqin152/argo-ios/pull/3) 另有通知路由修复待完成。
+当前已核对的后端候选为 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44) 的 `6d189c72eacdc2688c8fa788b2c6af13e2d38201`。它仍是候选，最终发布前需记录最终已验证的主机来源。运行服务尚未部署此候选；部署后的真实配对、回复和 APNs 仍待验收。iOS 源码候选见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。
 
-队列预览与全文需要相应后端升级。运行服务尚未部署此源码，也尚未指定已发布的最低主机版本号；部署后的真实配对、回复与 APNs 仍待验收。最终组合完成后，需更新已核验的后端 SHA，并核对对应 iOS 提交的新云构建结果。
+旧主机需升级到具备这些能力的版本。完整能力说明与开发者接口约定见[主机兼容说明](../docs/COMPATIBILITY.md)，队列接口见[queue wire v2](../research/queue-wire-v2/queue-wire-v2.md)。
 
 ## 配对、输入与权限
 
@@ -56,7 +56,9 @@ xcodebuild -jobs 2 \
 
 长文本通过输入框的展开按钮进入全页编辑。Return 默认换行，Settings 的 Return Key Sends（按回车发送）默认关闭；开启后 Return 发送，Shift/Option-Return 换行。Paste Image 通过系统按钮在主动点击时导入图片。附件与发送共用原有会话归属及回执，结果未知时由用户刷新确认。
 
-手机提醒按主机开启，权限与配置见[手机通知](../docs/phone-notifications.md)。实际真机签名、通知权限 UI、APNs 和后台收取尚未验收。
+手机发送内容可在投递回执中查看；主机读回 Agent 会话记录后，消息显示在对应对话中。排队或收到交接回执不表示 Agent 已完成回复，结果未知的回执也不会因出现相同文本而自动变为成功。
+
+手机提醒按主机开启，点击提醒只打开对应主机和会话，不发送消息；已停用或替换的注册所对应的旧提醒会被忽略。权限与配置见[手机通知](../docs/phone-notifications.md)。实际真机签名、通知权限 UI、APNs 和后台收取尚未验收。
 
 ## 核心与结构检查
 
@@ -74,6 +76,8 @@ XcodeGen 一致性检查为在 `ios/` 中运行 `./scripts/generate.sh --check`�
 
 云构建先执行现有 Core 测试，再生成 Xcode 工程并运行 Release iPhoneOS archive 和 IPA 打包，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。扫码、全页编辑、Return 发送、主动 PasteButton、会话与通知代码均参与完整 App 编译；每次结果绑定对应提交，以 Actions 检查、产物和日志为准。
 
-真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。本次文档收口仅核对源码、配置、来源链接和补丁，不执行这些功能验收。
+已有成功云构建 [43859719631](https://github.com/xiayuqin152/argo-ios/actions/runs/43859719631) 仅对应 iOS 源码 `3d38c9afecc362a1bf549984c9448bfc83e18c1c`。后续源码变更的 SDK 构建、原生 UIKit 测试、归档和 IPA 验包待对应提交的新云结果；下载时请核对运行记录中的源码 SHA。
+
+真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。
 
 许可见根目录 [MIT License](../LICENSE) 与 [UPSTREAM.md](../UPSTREAM.md) 所列的实际 Persona、BeautifulUI、Beautiful UI MIT/NOTICE。
