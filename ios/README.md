@@ -1,10 +1,10 @@
 # 构建与安装 Argo iOS
 
-App 面向 iOS 26+ 的 iPhone / iPad，使用 Swift 6；产品、target、scheme 和显示名为 `Argo`，Bundle ID 为 `dev.argo.ios`。
+本仓库仅提供 iOS 客户端。App 面向 iOS 26+ 的 iPhone / iPad，使用 Swift 6；产品、target、scheme 和显示名为 `Argo`，Bundle ID 为 `dev.argo.ios`。Argo 主机需单独运行。
 
 ## 获取构建产物
 
-[Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml)使用 GitHub 标准 `macos-26` runner、Xcode 26.6 和 XcodeGen 2.46.0，以 jobs=2 运行 ArgoMobileKit Core 测试、生成工程、执行 Release iPhoneOS archive 并打包 unsigned IPA。Core 测试失败会中止后续构建，其日志与 archive 日志一并上传。定义见 [.github/workflows/ios-unsigned.yml](../.github/workflows/ios-unsigned.yml)。
+[Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml)配置为使用 GitHub 标准 `macos-26` runner、Xcode 26.6 和 XcodeGen 2.46.0，以 jobs=2 运行 ArgoMobileKit Core 测试、生成工程、执行 Release iPhoneOS archive 并打包 unsigned IPA，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。Core 测试失败会中止后续构建，其日志、archive 与测试日志一并上传。定义见 [.github/workflows/ios-unsigned.yml](../.github/workflows/ios-unsigned.yml)。云构建运行在 GitHub 托管的 Mac 上，无需自备 Mac 或安装本地 Xcode。
 
 在 [Argo iOS unsigned 工作流](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 中选择所需提交对应的成功运行。进入 Artifacts，查看 `Argo-iOS-unsigned-…`，其中包含 unsigned IPA、archive 和日志；当前工作流产物保留 3 天。
 
@@ -36,26 +36,29 @@ xcodebuild -jobs 2 \
 <a id="host-compatibility"></a>
 ## 主机兼容要求
 
-兼容性按主机实际能力判断，目前尚未指定包含这些增量的已发布主机版本，也不提供新的服务端安装命令。
+兼容性按主机实际能力判断，目前尚未指定已发布的最低主机版本。配对前请确认主机具备下列能力；本仓库不包含或部署服务端。
 
-| 能力 | 已核对的契约 |
+| 能力 | 主机要求与手机体验 |
 | --- | --- |
-| 网关与接口 | gateway proto=1、HTTP api=1 |
-| 会话阅读 | 客户端请求 `GET /api/terminals/{id}/chat?bounded=1`；响应必须声明 `bounded: true` 和 `byteLimit: 1048576`，支持 `recordOffset:blockIndex` 形式的 before/after/around 游标及 fileRefs |
-| 会话回复 | 当前已接通的 managed 会话具有可写身份和主机回执；历史、manual 或未接入会话只读 |
-| 手机提醒 | 主机提供以已配对设备凭证认证的 `PUT/DELETE /api/notify/device`，并配置自己的 APNs |
+| 配对与连接 | 支持 Argo 配对、设备凭证认证，以及手机可访问的主机地址 |
+| 会话阅读 | 支持有界会话读取、历史翻页和附件引用；手机发送的消息随主机读回的 Agent 会话记录显示 |
+| 会话回复 | 已接通的 managed 会话支持发送和回执；历史、manual 或未接入会话只读 |
+| 队列与早先记录 | 支持队列预览、按原消息读取全文和早先交接记录；结果未知时保留回执，不自动重发 |
+| 手机提醒 | 支持已配对设备的通知注册，并配置主机自己的 APNs |
 
-最新 fetch 核对的 Argo 源码主线为 `56b03830908811c8cc1675675bbdd59127303b5f`，已包含独立审查通过的后端组合 `eba473a09100b11b2f6ea0cf77ab5817f50f6608`。两者源码树一致，包含上述聊天、配对与通知能力。
+后端源码变更在主机项目中单独跟踪，iOS 源码变更见 [PR#3](https://github.com/xiayuqin152/argo-ios/pull/3)。配对与回复需在实际部署的主机上验收；启用手机提醒时还需验收 APNs。
 
-运行服务尚未部署此源码，也尚未指定已发布的最低主机版本号；部署后的真实配对、回复与 APNs 仍待验收。
+旧主机需升级到具备这些能力的版本。完整能力说明与开发者接口约定见[主机兼容说明](../docs/COMPATIBILITY.md)，队列接口见[queue wire v2](../research/queue-wire-v2/queue-wire-v2.md)。
 
 ## 配对、输入与权限
 
 在兼容主机运行 `argo pair`，然后在手机扫描二维码、主动粘贴或手动输入完整 `argo1:` 码。码一次有效，10 分钟过期。扫码申请相机权限；不支持扫描或未授权时，可继续粘贴/输入。连接局域网主机需要本地网络权限。
 
-长文本通过输入框的展开按钮进入全页编辑。Return 默认换行，Settings 的 Return Key Sends（按回车发送）默认关闭；开启后 Return 发送、Shift-Return 换行。Paste Image 通过系统按钮在主动点击时导入图片。附件与发送共用原有会话归属及回执，结果未知时由用户刷新确认。
+长文本通过输入框的展开按钮进入全页编辑。Return 默认换行，Settings 的 Return Key Sends（按回车发送）默认关闭；开启后 Return 发送，Shift/Option-Return 换行。Paste Image 通过系统按钮在主动点击时导入图片。附件与发送共用原有会话归属及回执，结果未知时由用户刷新确认。
 
-手机提醒按主机开启，权限与配置见[手机通知](../docs/phone-notifications.md)。实际真机签名、通知权限 UI、APNs 和后台收取尚未验收。
+手机发送内容可在发送回执中查看；主机读回 Agent 会话记录后，消息显示在对应对话中。排队或收到交接回执不表示 Agent 已完成回复，结果未知的回执也不会因出现相同文本而自动变为成功。
+
+手机提醒按主机开启，点击提醒只打开对应主机和会话，不发送消息；已停用或替换的注册所对应的旧提醒会被忽略。权限与配置见[手机通知](../docs/phone-notifications.md)。实际真机签名、通知权限 UI、APNs 和后台收取尚未验收。
 
 ## 核心与结构检查
 
@@ -69,10 +72,12 @@ python3 ios/scripts/check_project.py
 XcodeGen 一致性检查为在 `ios/` 中运行 `./scripts/generate.sh --check`，要求使用同一生成器版本。
 
 <a id="validation-status"></a>
-## 当前验收状态
+## 构建记录与待验范围
 
-云构建先执行现有 Core 测试，再生成 Xcode 工程并运行 Release iPhoneOS archive 和 IPA 打包。扫码、全页编辑、Return 发送、主动 PasteButton、会话与通知代码均参与完整 App 编译；每次结果绑定对应提交，以 Actions 检查、产物和日志为准。
+每次构建结果和产物仅适用于 Actions 运行记录中的源码提交。下载前请核对源码 SHA，并查看该次运行的检查结果和日志。
 
-真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。本次文档收口仅核对源码、配置、来源链接和补丁，不执行这些功能验收。
+已有成功云构建 [43859719631](https://github.com/xiayuqin152/argo-ios/actions/runs/43859719631) 仅对应 iOS 源码 `3d38c9afecc362a1bf549984c9448bfc83e18c1c`。此历史记录不覆盖后续提交；后续提交的 SDK 构建、原生 UIKit 测试、归档和 IPA 验包结果，请查看对应的 Actions 运行及产物。
+
+真实配对、输入法/系统粘贴、Photos/Quick Look、辅助功能、签名安装及 APNs 后台收取/点击仍需设备验收。
 
 许可见根目录 [MIT License](../LICENSE) 与 [UPSTREAM.md](../UPSTREAM.md) 所列的实际 Persona、BeautifulUI、Beautiful UI MIT/NOTICE。

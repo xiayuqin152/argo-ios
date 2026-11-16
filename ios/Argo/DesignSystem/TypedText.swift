@@ -4,11 +4,6 @@ import UIKit
 import GameController
 
 enum TypedText {
-    /// Return confirms an active IME composition without sending the draft.
-    @MainActor static var composingFocused: Bool {
-        (FirstResponder.current as? UITextInput)?.markedTextRange != nil
-    }
-
     @MainActor static func commitFocused(into text: Binding<String>) {
         guard let view = FirstResponder.current as? (UIResponder & UITextInput) else { return }
         if view.markedTextRange != nil { view.unmarkText() }
@@ -32,131 +27,224 @@ private extension UIResponder {
     @objc func argoFindFirstResponder(_ sender: Any?) { FirstResponder.found = self }
 }
 
-// Adapted from Persona PR #8202 @ 75c30cc008554144a72fb917edd548f528ea45b0 (MIT).
-// Argo keeps delivery, drafts, stop, attachments, and Cmd-Return with its existing callers.
-/// Settings › Appearance & Display › Return Key Sends (#8178), off by default: Return in a chat's composer sends, as the
-/// web's Enter does with a precise pointer (`enterSends`) and the Mac's always does; Shift-Return is a new line. Off,
-/// Return is a new line as before and the composer is unchanged. On the iPhone and iPad only: the Mac already sends.
-///
-/// The composers' fields are SwiftUI's vertical `TextField`, which takes Return as a line break and never submits. So
-/// the software keyboard's Return is read off the draft: an edit that only adds one line break is Return typed. A
-/// hardware keyboard's Return is caught as a key press first (`onKeyPress`), and when that does not reach the field,
-/// read off the draft the same way, with Shift held (`GCKeyboard`) leaving the line break. While the keyboard is still
-/// composing (marked text: Pinyin, kana) Return confirms the composition as it always has and sends nothing (#2203).
+/// Shared with Settings; Return Key Sends remains opt-in.
 nonisolated enum ReturnSends {
     static let enabledKey = "argo.returnSends"
-
-    /// `new` is `old` with one line break typed into it, and nothing else changed (one key's edit, not a paste).
-    static func breakTyped(from old: String, to new: String) -> Bool {
-        let o = old.utf8, n = new.utf8
-        guard n.count == o.count + 1 else { return false }
-        var i = o.startIndex, j = n.startIndex
-        while i != o.endIndex, o[i] == n[j] {
-            o.formIndex(after: &i)
-            n.formIndex(after: &j)
-        }
-        // `j` moves with `i`, so it stops short of `n`'s end (one byte longer); the guard keeps that true by itself.
-        guard j != n.endIndex, n[j] == UInt8(ascii: "\n") else { return false }
-        return n[n.index(after: j)...].elementsEqual(o[i...])
-    }
-
-    /// Whether an edit to the draft is a Return that sends: one line break typed, with nothing else holding Return
-    /// (`paused`), not a hardware Shift- or Option-Return let through (`allowed`), and never while the keyboard still
-    /// has marked text (`composing`): a keyboard that confirms its composition with a line break must not send (#2203).
-    /// `composing` is read only after a line break was typed: it asks the field (this runs on every keystroke).
-    static func breakSends(from old: String, to new: String, composing: @autoclosure () -> Bool,
-                           allowed: Bool = false, paused: Bool = false) -> Bool {
-        !paused && !allowed && breakTyped(from: old, to: new) && !composing()
-    }
-
-    /// What a hardware Return does with these modifiers held: send with none, else what the field does (Shift and
-    /// Option a new line, ⌘ the send button's shortcut). Caps Lock and the keypad's Enter are no modifiers.
-    static func keySends(_ modifiers: EventModifiers, composing: Bool) -> Bool {
-        !composing && modifiers.subtracting([.capsLock, .numericPad]).isEmpty
-    }
-
-    /// What Return does when it would send.
-    enum Outcome: Equatable {
-        /// Send, as the send button would.
-        case send
-        /// The send button's place says what to do first (`SendGate`): Return does what tapping it does.
-        case gate
-        /// Nothing to send (an empty draft, an upload still running): nothing happens, no blank line either.
-        case nothing
-    }
-
-    static func outcome(canSend: Bool, gated: Bool) -> Outcome {
-        gated ? .gate : canSend ? .send : .nothing
-    }
 }
 
-extension View {
-    /// Return sends from this composer while Return Key Sends is on (`ReturnSends`). `send` is the send button's
-    /// action, `gate` the action of what stands in its place; `paused` while Return belongs to something else (a list
-    /// over the field that picks with it).
-    func returnSends(text: Binding<String>, canSend: Bool, gate: (() -> Void)? = nil, paused: Bool = false,
-                     send: @escaping () -> Void) -> some View {
-        #if os(iOS)
-        modifier(ReturnSendsModifier(text: text, canSend: canSend, gate: gate, paused: paused, send: send))
-        #else
-        self
-        #endif
-    }
-}
-
-#if os(iOS)
-private struct ReturnSendsModifier: ViewModifier {
+/// Only the two conversation editing surfaces use this native input boundary.
+/// UIKit owns editing, marked text, undo, selection, paste and drop. SwiftUI still
+/// owns the Persona surface/layout and the conversation's draft and focus.
+struct ComposerTextInput: UIViewRepresentable {
     @Binding var text: String
+    @Binding var selection: NSRange?
+    @Binding var focused: Bool
+    var maximumLines: Int? = nil
+    var returnSends = false
     var canSend: Bool
-    var gate: (() -> Void)?
-    var paused: Bool
+    var acceptsInput: () -> Bool
     var send: () -> Void
-    @AppStorage(ReturnSends.enabledKey) private var enabled = false
-    /// A hardware Shift-Return just went to the field: the line break it types stays.
-    @State private var breakAllowed = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
-    func body(content: Content) -> some View {
-        content
-            // The software keyboard's key reads "send" while Return sends; `.return` is the field's own default.
-            .submitLabel(enabled ? .send : .return)
-            .onKeyPress(.return, phases: .down) { press in
-                guard enabled, !paused else { return .ignored }
-                guard ReturnSends.keySends(press.modifiers, composing: TypedText.composingFocused) else {
-                    breakAllowed = press.modifiers.contains(.shift) || press.modifiers.contains(.option)
-                    return .ignored
-                }
-                act()
-                return .handled
-            }
-            .onChange(of: text) { old, new in
-                guard enabled else { return }
-                let allowed = breakAllowed
-                breakAllowed = false
-                // The cheap checks first: this runs on every keystroke (docs/apple/performance.md P4); the field's
-                // marked text and Shift are read only once a line break was typed.
-                guard ReturnSends.breakSends(from: old, to: new, composing: TypedText.composingFocused,
-                                             allowed: allowed, paused: paused),
-                      !Self.shiftHeld else { return }
-                // Take the line break back out of the field itself as well as the draft: sending confirms what the
-                // field shows (`TypedText.commitFocused`), which would otherwise put it back.
-                if let view = FirstResponder.current as? UITextView, view.text == new { view.text = old }
-                text = old
-                act()
-            }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> ComposerTextView {
+        let view = ComposerTextView()
+        view.delegate = context.coordinator
+        view.pasteDelegate = view
+        view.backgroundColor = .clear
+        view.textColor = .label
+        view.allowsEditingTextAttributes = false
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        if maximumLines != nil {
+            view.textContainerInset = .zero
+            view.textContainer.lineFragmentPadding = 0
+        }
+        view.submit = { [weak coordinator = context.coordinator] view in
+            coordinator?.submit(view)
+        }
+        return view
     }
 
-    private func act() {
-        switch ReturnSends.outcome(canSend: canSend, gated: gate != nil) {
-        case .send: send()
-        case .gate: gate?()
-        case .nothing: break
+    func updateUIView(_ view: ComposerTextView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.parent = self
+        coordinator.updating = true
+        defer { coordinator.updating = false }
+        view.acceptsInput = acceptsInput
+        view.isEditable = acceptsInput()
+        view.sendsOnReturn = returnSends
+        let label: UIReturnKeyType = returnSends ? .send : .default
+        if view.returnKeyType != label {
+            view.returnKeyType = label
+            if view.isFirstResponder { view.reloadInputViews() }
+        }
+        let traits = UITraitCollection(preferredContentSizeCategory: contentSizeCategory)
+        let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits)
+        if view.font != font { view.font = font }
+        coordinator.updateDraft(view)
+        view.wantsFocus = focused && view.isEditable
+        view.updateFocus()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ComposerTextView, context: Context) -> CGSize? {
+        guard let maximumLines, let width = proposal.width, width > 0 else { return nil }
+        let line = uiView.font?.lineHeight ?? 0
+        let height = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: width, height: ceil(min(max(height, line), line * CGFloat(maximumLines))))
+    }
+
+    // Use the reading environment, including Persona's Small/Standard/Large
+    // preference and AX sizes, rather than the interface's capped traits.
+    private var contentSizeCategory: UIContentSizeCategory {
+        switch typeSize {
+        case .xSmall: .extraSmall
+        case .small: .small
+        case .medium: .medium
+        case .large: .large
+        case .xLarge: .extraLarge
+        case .xxLarge: .extraExtraLarge
+        case .xxxLarge: .extraExtraExtraLarge
+        case .accessibility1: .accessibilityMedium
+        case .accessibility2: .accessibilityLarge
+        case .accessibility3: .accessibilityExtraLarge
+        case .accessibility4: .accessibilityExtraExtraLarge
+        case .accessibility5: .accessibilityExtraExtraExtraLarge
+        @unknown default: .large
         }
     }
 
-    /// Shift is held on a hardware keyboard (the key press did not reach the field, so its modifiers were not read).
-    private static var shiftHeld: Bool {
-        guard let keys = GCKeyboard.coalesced?.keyboardInput else { return false }
-        return keys.button(forKeyCode: .leftShift)?.isPressed == true || keys.button(forKeyCode: .rightShift)?.isPressed == true
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ComposerTextInput
+        var updating = false
+        init(_ parent: ComposerTextInput) { self.parent = parent }
+
+        func updateDraft(_ view: ComposerTextView) {
+            // A render during composition must not unmark or move its selection.
+            guard view.markedTextRange == nil else { return }
+            if view.text != parent.text { view.setDraft(parent.text) }
+            let count = (view.text as NSString).length
+            let wanted = parent.selection ?? NSRange(location: count, length: 0)
+            let start = min(wanted.location, count)
+            let selected = NSRange(location: start, length: min(wanted.length, count - start))
+            if view.selectedRange != selected { view.selectedRange = selected }
+            view.invalidateIntrinsicContentSize()
+        }
+
+        func submit(_ view: ComposerTextView) {
+            guard parent.focused, parent.acceptsInput(), parent.canSend else { return }
+            parent.send()
+            // send() clears the binding synchronously. Clear the native buffer in
+            // the same event so a second Return/commit cannot restore the draft.
+            updating = true
+            defer { updating = false }
+            updateDraft(view)
+        }
+
+        func textViewShouldBeginEditing(_ textView: UITextView) -> Bool { parent.acceptsInput() }
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            if !updating { parent.focused = true }
+        }
+        func textViewDidEndEditing(_ textView: UITextView) {
+            if !updating { parent.focused = false }
+        }
+        func textViewDidChange(_ textView: UITextView) {
+            guard !updating, parent.acceptsInput() else { return }
+            parent.text = textView.text
+            parent.selection = textView.selectedRange
+            textView.invalidateIntrinsicContentSize()
+        }
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !updating, parent.acceptsInput() else { return }
+            parent.selection = textView.selectedRange
+        }
     }
 }
-#endif
+
+/// UIKeyInput is the keyboard insertion boundary. Text replacements, programmatic
+/// draft updates and UITextPasteDelegate (both paste and drop, including async item
+/// providers) never enter the Return action. No draft-diff or clipboard inspection.
+final class ComposerTextView: UITextView, UITextPasteDelegate {
+    var sendsOnReturn = false
+    var acceptsInput: () -> Bool = { false }
+    var submit: ((ComposerTextView) -> Void)?
+    var wantsFocus = false
+    private var replacing = false
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updateFocus()
+    }
+
+    func updateFocus() {
+        let shouldFocus = wantsFocus && acceptsInput()
+        if shouldFocus && window != nil && !isFirstResponder { becomeFirstResponder() }
+        else if !shouldFocus && isFirstResponder { resignFirstResponder() }
+    }
+
+    override func insertText(_ text: String) {
+        if text == "\n", !replacing, sendsOnReturn, isFirstResponder,
+           acceptsInput(), markedTextRange == nil, !Self.lineBreakModifierHeld {
+            submit?(self)
+            return
+        }
+        super.insertText(text)
+    }
+
+    override func replace(_ range: UITextRange, withText text: String) {
+        // UIKit may implement a replacement by calling insertText internally.
+        // The origin stays replacement for that entire synchronous operation.
+        let previous = replacing
+        replacing = true
+        defer { replacing = previous }
+        super.replace(range, withText: text)
+    }
+
+    func setDraft(_ draft: String) {
+        let previous = replacing
+        replacing = true
+        defer { replacing = previous }
+        text = draft
+    }
+
+    func textPasteConfigurationSupporting(_ textPasteConfigurationSupporting: any UITextPasteConfigurationSupporting,
+                                          performPasteOf attributedString: NSAttributedString,
+                                          to textRange: UITextRange) -> UITextRange {
+        guard acceptsInput() else { return textRange }
+        let start = offset(from: beginningOfDocument, to: textRange.start)
+        replace(textRange, withText: attributedString.string)
+        let end = position(from: beginningOfDocument, offset: start + attributedString.length) ?? endOfDocument
+        selectedTextRange = self.textRange(from: end, to: end)
+        // UITextInput.replace is also a programmatic API; publish explicitly.
+        delegate?.textViewDidChange?(self)
+        return self.textRange(from: position(from: beginningOfDocument, offset: start) ?? end, to: end) ?? textRange
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        // Cmd-Return remains the existing SwiftUI send button's shortcut. Only
+        // modified line breaks belong here; IME confirmation keeps UIKit's keys.
+        guard acceptsInput(), markedTextRange == nil else { return super.keyCommands }
+        let breaks = [UIKeyModifierFlags.shift, .alternate, [.shift, .alternate]].map {
+            let key = UIKeyCommand(input: "\r", modifierFlags: $0, action: #selector(insertLineBreak))
+            key.wantsPriorityOverSystemBehavior = true
+            return key
+        }
+        return breaks + (super.keyCommands ?? [])
+    }
+
+    @objc private func insertLineBreak() {
+        // Directly invoke UIKit editing; this explicit modified key never sends.
+        super.insertText("\n")
+    }
+
+    /// Preserve Shift/Option even when UIKit delivers hardware input through
+    /// UIKeyInput instead of the registered key command. Read only for a keyboard
+    /// newline, never to classify a change to the draft.
+    private static var lineBreakModifierHeld: Bool {
+        guard let keys = GCKeyboard.coalesced?.keyboardInput else { return false }
+        return keys.button(forKeyCode: .leftShift)?.isPressed == true || keys.button(forKeyCode: .rightShift)?.isPressed == true ||
+            keys.button(forKeyCode: .leftAlt)?.isPressed == true || keys.button(forKeyCode: .rightAlt)?.isPressed == true ||
+            keys.button(forKeyCode: .leftControl)?.isPressed == true || keys.button(forKeyCode: .rightControl)?.isPressed == true ||
+            keys.button(forKeyCode: .leftGUI)?.isPressed == true || keys.button(forKeyCode: .rightGUI)?.isPressed == true
+    }
+}

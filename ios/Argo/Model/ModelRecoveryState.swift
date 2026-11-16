@@ -48,8 +48,10 @@ extension ConversationState {
     var modelRecoveryNeedsReviewBeforeNewAction: Bool {
         guard let operation = modelRecovery else { return false }
         switch operation.status {
-        case .unknown, .switchedAndResumed, .switchedNotResumed: return !hasCurrentModelRecoveryProof
-        case .sending, .notSwitched, .notSent, .rejected: return false
+        // switched:false also covers the host's wait expiring after /model
+        // was sent. Review the native conversation before another model write.
+        case .unknown, .notSwitched, .switchedAndResumed, .switchedNotResumed: return !hasCurrentModelRecoveryProof
+        case .sending, .notSent, .rejected: return false
         }
     }
 

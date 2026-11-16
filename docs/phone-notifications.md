@@ -5,7 +5,7 @@
 ## 手机上开启
 
 1. 配对并选择兼容主机。
-2. 打开 **Settings → Notifications → Agent Alerts on This iPhone**，允许 iOS 的提醒和声音权限。尚未开启此开关时，App 不主动请求通知授权。
+2. 打开 **Settings → Notifications → Agent Alerts on This Device**，允许 iOS 的提醒和声音权限。尚未开启此开关时，App 不主动请求通知授权。
 3. 若系统权限已拒绝，使用页面的 **Open iOS Settings** 调整；配置或网络错误会显示在页面，可用 **Retry Notifications** 重试。
 
 每个主机单独开启。关闭提醒或忘记主机时，App 先向该主机注销通知；离线或失败时保留凭据，供重连后重试。通知点击定位已配对主机的会话，只读取状态和记录，不自动发送回复。

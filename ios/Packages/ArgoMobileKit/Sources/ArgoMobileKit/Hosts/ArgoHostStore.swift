@@ -55,12 +55,12 @@ public actor ArgoHostStore {
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             return HostFile(hosts: [])
         } catch {
-            throw LoomError.message("读不了已保存的主机（\(fileURL.lastPathComponent)）：\(error.localizedDescription)")
+            throw ArgoClientError.invalidResponse(.message("Could not read the saved host store: %@", arguments: [fileURL.lastPathComponent + ": " + error.localizedDescription]))
         }
         do {
             return try JSONDecoder().decode(HostFile.self, from: data)
         } catch {
-            throw LoomError.message("已保存的主机文件已损坏（\(fileURL.path)），没有改动它。删除它后可重新配对。")
+            throw ArgoClientError.invalidResponse(.message("The saved host store is corrupted: %@. Delete it and pair again.", arguments: [fileURL.path]))
         }
     }
 

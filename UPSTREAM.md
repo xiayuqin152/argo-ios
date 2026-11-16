@@ -9,8 +9,10 @@ Argo's UI and input code are adapted from [nwverse/Persona](https://github.com/n
 This source export includes no Git history, platform SDKs, caches, user configuration, Persona Hub or private assistant data. Argo contributions are covered by the root MIT LICENSE, © 2026 Argo contributors.
 
 The per-file origin commits, Git blob IDs and adaptations are retained in
-[upstream-files.json](ios/Argo/Verification/upstream-files.json). This is the only
-file retained from the development Verification directory.
+[upstream-files.json](ios/Argo/Verification/upstream-files.json). This was the only
+file retained from the original development Verification directory export.
+[NotificationUnregisterCheck.swift](ios/Argo/Verification/NotificationUnregisterCheck.swift)
+was added later as an Argo notification lifecycle regression check.
 
 QR pairing, full-page composition and the native image PasteButton use Persona
 revision `89927b54baab6b8207315f6c2a4d2e5831598d45`. Pairing keeps Argo's existing

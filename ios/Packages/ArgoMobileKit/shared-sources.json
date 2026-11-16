@@ -29,7 +29,7 @@
     {
       "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/GatewayConnection.swift",
       "argo_source": "mac/Sources/LoomKit/GatewayConnection.swift",
-      "sha256": "82c0395c479c2bf1c7d7d0064931ad395a8be320372e1b5188e85a4f7a1b923d"
+      "sha256": "0fdbcae9bad377f50c60be90e586379a2d75a52c5c3587680ee4df2c71a6c304"
     },
     {
       "path": "ios/Packages/ArgoMobileKit/Sources/ArgoMobileKit/LoomKitShared/AgentNameTags.swift",

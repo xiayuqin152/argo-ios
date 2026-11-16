@@ -140,6 +140,8 @@
 "The native conversation changed. Refresh again with the same native identity before starting another model change." = "The native conversation changed. Refresh again with the same native identity before starting another model change.";
 
 /* Client errors. Server response bodies remain verbatim. */
+"Could not read the saved host store: %@" = "Could not read the saved host store: %@";
+"The saved host store is corrupted: %@. Delete it and pair again." = "The saved host store is corrupted: %@. Delete it and pair again.";
 "The connection is closed." = "The connection is closed.";
 "The operation was cancelled." = "The operation was cancelled.";
 "The host returned an error (HTTP %@)." = "The host returned an error (HTTP %@).";
@@ -356,7 +358,7 @@
 
 /* Argo phone notifications */
 "Notifications" = "Notifications";
-"Agent Alerts on This iPhone" = "Agent Alerts on This iPhone";
+"Agent Alerts on This Device" = "Agent Alerts on This Device";
 "Alerts from the selected host contain status only. Tap an alert to open its Agent." = "Alerts from the selected host contain status only. Tap an alert to open its Agent.";
 "Retry Notifications" = "Retry Notifications";
 "Open iOS Settings" = "Open iOS Settings";
@@ -370,3 +372,55 @@
 "The signed app needs an explicit APNs environment and bundle topic." = "The signed app needs an explicit APNs environment and bundle topic.";
 "This notification's workspace is no longer available." = "This notification's workspace is no longer available.";
 "This notification's Agent is no longer available." = "This notification's Agent is no longer available.";
+
+/* Native handoff status */
+"Codex Received" = "Codex Received";
+"Native Receipt Unknown" = "Native Receipt Unknown";
+"Codex has received this input. This does not confirm model completion." = "Codex has received this input. This does not confirm model completion.";
+"Reception is unknown. Check the original conversation. Do not send this input again." = "Reception is unknown. Check the original conversation. Do not send this input again.";
+"Original Conversation" = "Original Conversation";
+"This record belongs to a different native conversation." = "This record belongs to a different native conversation.";
+"The original conversation identity is unavailable." = "The original conversation identity is unavailable.";
+"Hide Handoff Record?" = "Hide Handoff Record?";
+"Hide Record" = "Hide Record";
+"This only hides the Argo status record. It does not cancel or retract input already received by Codex." = "This only hides the Argo status record. It does not cancel or retract input already received by Codex.";
+"Native records: %lld" = "Native records: %lld";
+"Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged." = "Hiding was not confirmed. Refresh the records before trying again. Codex input is unchanged.";
+"The handoff record has no identifier. Refresh the conversation." = "The handoff record has no identifier. Refresh the conversation.";
+
+/* Queue preview and full reads */
+"Queue details are a shortened preview." = "Queue details are a shortened preview.";
+"Shortened preview — original content remains on the host." = "Shortened preview — original content remains on the host.";
+"Copy Full Message" = "Copy Full Message";
+"View Full Message" = "View Full Message";
+"Full Message" = "Full Message";
+"Loading Full Message…" = "Loading Full Message…";
+"The complete message could not be loaded. The queue record is unchanged." = "The complete message could not be loaded. The queue record is unchanged.";
+"The queue item has no identifier. Refresh the conversation." = "The queue item has no identifier. Refresh the conversation.";
+"The queue item changed. Refresh the conversation." = "The queue item changed. Refresh the conversation.";
+"The host returned an incomplete full message." = "The host returned an incomplete full message.";
+"The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version." = "The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version.";
+"Copied" = "Copied";
+
+/* Original read-only handoffs after native session resume. */
+"Records Before Resume" = "Records Before Resume";
+"Read-only records from the original conversation. These are not pending messages or confirmation of model completion." = "Read-only records from the original conversation. These are not pending messages or confirmation of model completion.";
+"Loading Original Records…" = "Loading Original Records…";
+"Original records could not be loaded." = "Original records could not be loaded.";
+"Refresh Records" = "Refresh Records";
+"The original record source changed. Refresh the conversation." = "The original record source changed. Refresh the conversation.";
+"No matching original records were returned. Refresh the conversation." = "No matching original records were returned. Refresh the conversation.";
+"No remaining visible records for this source. Refresh the conversation to update its sources." = "No remaining visible records for this source. Refresh the conversation to update its sources.";
+
+/* Partial source warnings and terminal delivery uncertainty. */
+"Read-only records: %lld" = "Read-only records: %lld";
+"Some earlier records could not be loaded. Current messages and receipts remain available." = "Some earlier records could not be loaded. Current messages and receipts remain available.";
+"The original terminal may have received this input. Review the original conversation before sending it again." = "The original terminal may have received this input. Review the original conversation before sending it again.";
+"Earlier Records Unavailable" = "Earlier Records Unavailable";
+"Open the conversation to review earlier records." = "Open the conversation to review earlier records.";
+
+/* Explicit removal of an uncertain PTY record. */
+"Remove Unknown Delivery Record?" = "Remove Unknown Delivery Record?";
+"Remove Record" = "Remove Record";
+"This removes only the Argo record. It does not stop or retract input that may have reached the original terminal." = "This removes only the Argo record. It does not stop or retract input that may have reached the original terminal.";
+"Removal was not confirmed. Refresh the records before trying again. Terminal input is unchanged." = "Removal was not confirmed. Refresh the records before trying again. Terminal input is unchanged.";

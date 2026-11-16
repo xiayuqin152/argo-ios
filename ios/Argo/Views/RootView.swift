@@ -77,7 +77,8 @@ struct RootView: View {
     }
 
     private func openNotification() {
-        guard !model.loadingHosts, let route = notifications.takeRoute(hosts: model.hosts) else { return }
+        guard !model.loadingHosts, model.hostProblem == nil,
+              let route = notifications.takeRoute(hosts: model.hosts) else { return }
         hostsBinding.wrappedValue = false
         pairingPresentation.requestDismissal()
         settingsPresentation.requestDismissal()

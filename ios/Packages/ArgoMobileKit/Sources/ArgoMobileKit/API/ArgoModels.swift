@@ -315,6 +315,11 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
     public let done: Int
     /// Messages waiting in the run's queue.
     public let queued: Int
+    /// Read-only native handoffs, separate from messages waiting to send.
+    public let nativeHistory: Int
+    /// A partial failure reading earlier-run history, separate from current state.
+    /// nil means the host did not provide a source-read error.
+    public let nativeSourcesError: String?
     public let error: String
     public let endReason: String
     public let exitCode: Int?
@@ -333,7 +338,7 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case run, ws, terminal, profile, engine, cli, leader, title, latestTitle, activity, reply, status, state,
              stateText, failKind, failNote, stateStartedAt, interrupted, unread, attention, ask, waitingIDs, plan, tasks, done, queued, error,
-             endReason, exitCode, cwd, created, updated
+             endReason, exitCode, cwd, created, updated, nativeHistory, nativeSourcesError
     }
 
     public init(from decoder: Decoder) throws {
@@ -364,6 +369,8 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
         tasks = try c.value(.tasks, or: 0)
         done = try c.value(.done, or: 0)
         queued = try c.value(.queued, or: 0)
+        nativeHistory = try c.value(.nativeHistory, or: 0)
+        nativeSourcesError = try c.decodeIfPresent(String.self, forKey: .nativeSourcesError)
         error = try c.value(.error, or: "")
         endReason = try c.value(.endReason, or: "")
         exitCode = try c.decodeIfPresent(Int.self, forKey: .exitCode)
@@ -407,6 +414,8 @@ extension ArgoAgentCard {
         tasks = 0
         done = 0
         queued = 0
+        nativeHistory = 0
+        nativeSourcesError = nil
         error = ""
         endReason = ""
         exitCode = nil
@@ -743,38 +752,177 @@ public struct ArgoTurnAnswer: Decodable, Equatable, Sendable {
 
 // MARK: Sending
 
+/// A handoff acknowledgement, never a native chat record or model completion.
+public struct ArgoNativeHandoff: Decodable, Equatable, Sendable {
+    public enum State: Equatable, Sendable { case accepted, unknown }
+    public let state: State
+    public let note: String
+    public let unrecognizedState: String?
+
+    private enum CodingKeys: String, CodingKey { case state, note }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Presence of native is read-only even when a newer host adds a state.
+        let raw = try c.value(.state, or: "")
+        state = raw == "accepted" ? .accepted : .unknown
+        unrecognizedState = raw == "accepted" || raw == "unknown" ? nil : raw
+        note = try c.value(.note, or: "")
+    }
+}
+
 /// One queued message (queueItem).
 public struct ArgoQueuedMessage: Decodable, Equatable, Identifiable, Sendable {
     public let id: String
     public let text: String
     public let source: String
     public let created: String
+    public let updated: String
+    public let notBefore: String
+    /// A pasted row is read-only even before its input is submitted.
+    public let pastedAt: String?
+    /// Nonempty when the host may already have submitted this item. It keeps
+    /// the record for review and forbids automatic delivery or manual resend.
+    public let deliveryUnknown: String
+    public let native: ArgoNativeHandoff?
+    /// Original server-confirmed destination; never rebound to the current chat.
+    public let target: ArgoAgentIdentity?
+    public let submit: Bool
+    public let parked: Bool
+    public let truncatedFields: [String]
 
-    private enum CodingKeys: String, CodingKey { case id, text, source, created }
+    public var isIncomplete: Bool { !truncatedFields.isEmpty }
+    /// Unknown future markers cannot authorize copying or editing a preview.
+    public func isComplete(_ field: String) -> Bool {
+        let known: Set<String> = ["text", "source", "deliveryUnknown", "native.note", "origin.label", "origin.why", "pasted.placeholder"]
+        return !truncatedFields.contains(field) && truncatedFields.allSatisfy(known.contains)
+    }
+
+    public func matchesFullItem(_ full: ArgoQueuedMessage) -> Bool {
+        guard !full.isIncomplete, id == full.id, target == full.target, created == full.created,
+              updated == full.updated, notBefore == full.notBefore, pastedAt == full.pastedAt,
+              submit == full.submit, parked == full.parked,
+              native?.state == full.native?.state, native?.unrecognizedState == full.native?.unrecognizedState else { return false }
+        return (!isComplete("text") || text == full.text) &&
+            (!isComplete("source") || source == full.source) &&
+            (!isComplete("deliveryUnknown") || deliveryUnknown == full.deliveryUnknown) &&
+            (!isComplete("native.note") || native?.note == full.native?.note)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, text, source, created, updated, pasted, deliveryUnknown, native, target, submit, parked, truncatedFields
+        case notBefore = "not_before"
+    }
+    private enum PastedKeys: String, CodingKey { case at }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.value(.id, or: "")
         text = try c.value(.text, or: "")
         source = try c.value(.source, or: "")
         created = try c.value(.created, or: "")
+        updated = try c.value(.updated, or: "")
+        notBefore = try c.value(.notBefore, or: "")
+        if c.contains(.pasted), try !c.decodeNil(forKey: .pasted) {
+            pastedAt = try c.nestedContainer(keyedBy: PastedKeys.self, forKey: .pasted).decode(String.self, forKey: .at)
+        } else { pastedAt = nil }
+        deliveryUnknown = try c.value(.deliveryUnknown, or: "")
+        native = try c.decodeIfPresent(ArgoNativeHandoff.self, forKey: .native)
+        target = try c.decodeIfPresent(ArgoAgentIdentity.self, forKey: .target)
+        submit = try c.value(.submit, or: false)
+        parked = try c.value(.parked, or: false)
+        truncatedFields = try c.contains(.truncatedFields) ? c.decode([String].self, forKey: .truncatedFields) : []
+    }
+}
+
+/// A read-only reference to handoffs retained on an earlier run of the same
+/// native session. Read the original queue with `sourceRun`; keep its target.
+public struct ArgoNativeHistorySource: Decodable, Equatable, Sendable {
+    public let sourceRun: String
+    public let target: ArgoAgentIdentity
+    public let nativeHistory: Int
+
+    private enum CodingKeys: String, CodingKey { case sourceRun, target, nativeHistory }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sourceRun = try c.decode(String.self, forKey: .sourceRun)
+        target = try c.decode(ArgoAgentIdentity.self, forKey: .target)
+        nativeHistory = try c.decode(Int.self, forKey: .nativeHistory)
+        guard ArgoRun.isManaged(sourceRun), target.run == sourceRun, target.isValid, nativeHistory >= 0 else {
+            throw DecodingError.dataCorruptedError(forKey: .sourceRun, in: c, debugDescription: "Invalid native history source")
+        }
     }
 }
 
 /// A run's message queue (queueView). `hold`: why queued messages wait
 /// ("" = they go at the next look).
 public struct ArgoQueue: Decodable, Equatable, Sendable {
+    public static let previewByteLimit = 8_388_608
     public let run: String
+    public let ws: String
+    public let identity: ArgoAgentIdentity?
     public let state: String
+    public let ended: Bool
     public let hold: String
     public let items: [ArgoQueuedMessage]
+    public let later: [ArgoQueuedMessage]
+    public let truncatedFields: [String]
+    /// Ordinary unsent and scheduled messages. Absent on pre-handoff hosts.
+    public let pending: Int?
+    /// Read-only handoffs counted by the host, including available nativeSources.
+    /// The count may be incomplete when nativeSourcesError is present.
+    public let nativeHistory: Int
+    /// Earlier-run references, without their bodies or sendable items.
+    /// nil means the host did not provide sources, not that history is absent.
+    public let nativeSources: [ArgoNativeHistorySource]?
+    /// Earlier-run sources are incomplete. Available references and the current
+    /// queue/receipt remain valid; this does not replace their own notices.
+    /// nil means no source-read error was provided, not a complete-history guarantee.
+    public let nativeSourcesError: String?
 
-    private enum CodingKeys: String, CodingKey { case run, state, hold, items }
+    private enum CodingKeys: String, CodingKey { case run, ws, identity, state, ended, hold, items, later, pending, nativeHistory, nativeSources, nativeSourcesError, truncatedFields }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         run = try c.value(.run, or: "")
+        ws = try c.value(.ws, or: "")
+        identity = try c.decodeIfPresent(ArgoAgentIdentity.self, forKey: .identity)
         state = try c.value(.state, or: "")
+        ended = try c.value(.ended, or: false)
         hold = try c.value(.hold, or: "")
         items = try c.value(.items, or: [])
+        later = try c.value(.later, or: [])
+        truncatedFields = try c.contains(.truncatedFields) ? c.decode([String].self, forKey: .truncatedFields) : []
+        pending = try c.decodeIfPresent(Int.self, forKey: .pending)
+        nativeHistory = try c.value(.nativeHistory, or: 0)
+        nativeSources = try c.decodeIfPresent([ArgoNativeHistorySource].self, forKey: .nativeSources)
+        nativeSourcesError = try c.decodeIfPresent(String.self, forKey: .nativeSourcesError)
+    }
+}
+
+/// A read of one original item, never a delivery receipt or an editable preview.
+public struct ArgoQueueItemDetail: Decodable, Equatable, Sendable {
+    public let run: String
+    public let ws: String
+    public let identity: ArgoAgentIdentity
+    public let state: String
+    public let ended: Bool
+    public let later: Bool
+    public let item: ArgoQueuedMessage
+
+    private enum CodingKeys: String, CodingKey { case run, ws, identity, state, ended, later, item, truncatedFields }
+    private enum ItemKeys: String, CodingKey { case text }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        run = try c.decode(String.self, forKey: .run)
+        ws = try c.decode(String.self, forKey: .ws)
+        identity = try c.decode(ArgoAgentIdentity.self, forKey: .identity)
+        state = try c.decode(String.self, forKey: .state)
+        ended = try c.decode(Bool.self, forKey: .ended)
+        later = try c.decode(Bool.self, forKey: .later)
+        item = try c.decode(ArgoQueuedMessage.self, forKey: .item)
+        _ = try c.nestedContainer(keyedBy: ItemKeys.self, forKey: .item).decode(String.self, forKey: .text)
+        let truncated = try c.contains(.truncatedFields) ? c.decode([String].self, forKey: .truncatedFields) : []
+        guard !item.isIncomplete, truncated.isEmpty else {
+            throw ArgoClientError.invalidResponse(.message("The host returned an incomplete full message."))
+        }
     }
 }
 
@@ -783,10 +931,10 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
 public struct ArgoSendReceipt: Equatable, Sendable {
     public let run: String
     public let attempt: String
-    /// Written into the Agent now. false: queued, loomd delivers it when
-    /// the Agent is idle (also with no app open).
+    /// Written into the Agent now. false: inspect the queued item; an item
+    /// with deliveryUnknown is held for review and must not be sent again.
     public let delivered: Bool
-    /// The queued entry, when queued.
+    /// The retained entry, including an uncertain delivery held for review.
     public let queued: ArgoQueuedMessage?
     public let queue: ArgoQueue
     /// The text sits in the CLI's input box without its Enter (a permission
@@ -796,6 +944,7 @@ public struct ArgoSendReceipt: Equatable, Sendable {
     /// loomd answered from its attempt record (X-Loom-Duplicate): the first
     /// request with this attempt id had already been handled.
     public let duplicate: Bool
+    public private(set) var truncatedFields: [String] = []
 }
 
 struct DeliverResult: Decodable {
@@ -804,8 +953,9 @@ struct DeliverResult: Decodable {
     let queue: ArgoQueue
     let pasted: Bool
     let note: String
+    let truncatedFields: [String]
 
-    private enum CodingKeys: String, CodingKey { case delivered, item, queue, pasted, note }
+    private enum CodingKeys: String, CodingKey { case delivered, item, queue, pasted, note, truncatedFields }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         delivered = try c.decode(Bool.self, forKey: .delivered)
@@ -813,5 +963,6 @@ struct DeliverResult: Decodable {
         queue = try c.decode(ArgoQueue.self, forKey: .queue)
         pasted = try c.value(.pasted, or: false)
         note = try c.value(.note, or: "")
+        truncatedFields = try c.contains(.truncatedFields) ? c.decode([String].self, forKey: .truncatedFields) : []
     }
 }

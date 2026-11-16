@@ -61,12 +61,14 @@ public struct ChatTranscript: Equatable, Sendable {
             return .waiting(note)
         }
         switch cursor {
-        case .before, .after:
-            if page.identity != identity {
+        case .before, .after, .around:
+            // Around refreshes an existing native window too. A restarted
+            // manual CLI may keep its session while changing process identity.
+            if let identity, page.identity != identity {
                 reset()
                 return .sessionChanged
             }
-        case .latest, .around: break
+        case .latest: break
         }
         waiting = nil
         switch cursor {

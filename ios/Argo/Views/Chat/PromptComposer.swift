@@ -10,6 +10,7 @@ import SwiftUI
 struct PromptComposer: View {
     let placeholder: String
     @Bindable var input: ComposerInputOwner
+    let renewInputOwner: () -> Void
     let canSend: Bool
     let sending: Bool
     let showsStop: Bool
@@ -23,11 +24,12 @@ struct PromptComposer: View {
     let hasAttachments: Bool
     let attach: () -> Void
     let paste: ([NSItemProvider]) -> Void
-    @State private var selection: TextSelection?
-    @State private var parkedSelection: TextSelection?
+    @State private var selection: NSRange?
+    @State private var parkedSelection: NSRange?
     @State private var pagePresentation = SeenPresentation()
     @State private var sentFromPage = false
-    @FocusState private var focused: Bool
+    @State private var focused = false
+    @AppStorage(ReturnSends.enabledKey) private var returnSends = false
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -41,11 +43,7 @@ struct PromptComposer: View {
             PasteImageChip(focused: focused && input.acceptsInput, enabled: canAttach, paste: paste)
             box
         }
-        .sheet(isPresented: pagePresentation.binding(in: model, conversation: input.state.key), onDismiss: {
-            pagePresentation.didDismiss(in: model)
-            if !sentFromPage && input.acceptsInput { focused = true }
-            sentFromPage = false
-        }) {
+        .sheet(isPresented: pagePresentation.binding(in: model, conversation: input.state.key), onDismiss: pageDismissed) {
             ComposerPageEditor(placeholder: placeholder, input: input, selection: $selection,
                                canSend: canSend, sending: sending, showsStop: showsStop,
                                canStop: canStop, stopping: stopping, hasAttachments: hasAttachments,
@@ -59,8 +57,8 @@ struct PromptComposer: View {
                 .presentationSizing(.page)
                 .presentationDetents([.large])
         }
-        .onChange(of: input.valid) { _, valid in
-            if !valid { pagePresentation.requestDismissal() }
+        .onChange(of: input.canCommit) { _, current in
+            if !current { inputRevoked() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background && pagePresentation.owner == nil {
@@ -74,18 +72,22 @@ struct PromptComposer: View {
         ComposerBoxLayout(open: expanded, spacing: Theme.Space.xs,
                           rowGap: Theme.Space.l, rowLeading: Theme.Space.s,
                           rowTrailing: Theme.Space.s, rowBottom: expanded ? Theme.Space.s : 0) {
-            TextField(placeholder, text: draft,
-                      selection: pagePresentation.owner == nil ? $selection : $parkedSelection, axis: .vertical)
-                .font(Theme.Font.body)
-                .readingContent()
-                .lineLimit(1...Theme.Shell.composerPhoneMaximumLines)
-                .focused($focused)
-                .returnSends(text: draft, canSend: canSend && input.acceptsInput,
-                             paused: !focused || pagePresentation.owner != nil || !input.acceptsInput) {
+            ComposerTextInput(text: draft,
+                              selection: pagePresentation.owner == nil ? $selection : $parkedSelection,
+                              focused: $focused, maximumLines: Theme.Shell.composerPhoneMaximumLines,
+                              returnSends: returnSends, canSend: canSend,
+                              acceptsInput: { input.acceptsInput && pagePresentation.owner == nil }) {
                     commitMarkedText()
                     send()
                 }
-                .textFieldStyle(.plain)
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(verbatim: placeholder).font(Theme.Font.body)
+                            .foregroundStyle(.tertiary)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                }
+                .readingContent()
                 .padding(.leading, Theme.Space.l)
                 .padding(.trailing, expanded ? Theme.Size.tapTarget : Theme.Space.xs)
                 .padding(.vertical, Theme.Space.m)
@@ -159,10 +161,26 @@ struct PromptComposer: View {
         .animation(reduceMotion ? nil : Theme.Motion.composerGrow, value: text)
     }
 
+    private func inputRevoked() {
+        input.invalidate()
+        focused = false
+        pagePresentation.requestDismissal()
+        // Keep this owner until the sheet actually closes; its callbacks stay
+        // revoked, and the replacement shell starts without keyboard focus.
+        if pagePresentation.owner == nil { renewInputOwner() }
+    }
+
+    private func pageDismissed() {
+        pagePresentation.didDismiss(in: model)
+        if !sentFromPage && input.acceptsInput { focused = true }
+        sentFromPage = false
+        if !input.canCommit { renewInputOwner() }
+    }
+
     private func enlarge() {
         guard input.acceptsInput, pagePresentation.owner == nil else { return }
         if focused { commitMarkedText() }
-        else { selection = TextSelection(insertionPoint: text.endIndex) }
+        else { selection = NSRange(location: (text as NSString).length, length: 0) }
         sentFromPage = false
         pagePresentation.setPresented(true, in: model, conversation: input.state.key)
         focused = false

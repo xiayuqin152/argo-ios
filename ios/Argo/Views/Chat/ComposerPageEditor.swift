@@ -7,7 +7,7 @@ import SwiftUI
 struct ComposerPageEditor: View {
     let placeholder: String
     @Bindable var input: ComposerInputOwner
-    @Binding var selection: TextSelection?
+    @Binding var selection: NSRange?
     let canSend: Bool
     let sending: Bool
     let showsStop: Bool
@@ -19,9 +19,10 @@ struct ComposerPageEditor: View {
     let done: () -> Void
     let send: () -> Void
     let stop: () -> Void
-    @FocusState private var focused: Bool
-    @State private var cursor: TextSelection?
+    @State private var focused = false
+    @State private var cursor: NSRange?
     @State private var submission = ComposerSubmission()
+    @AppStorage(ReturnSends.enabledKey) private var returnSends = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var draft: Binding<String> {
@@ -48,11 +49,12 @@ struct ComposerPageEditor: View {
                         .accessibilityLabel("Finish Editing")
                         .accessibilityIdentifier("composer-page-done")
                 }
-                TextEditor(text: draft, selection: $cursor)
-                    .font(Theme.Font.body)
+                ComposerTextInput(text: draft, selection: $cursor, focused: $focused,
+                                  returnSends: returnSends,
+                                  canSend: canSend && !submission.claimed,
+                                  acceptsInput: { input.acceptsInput && !submission.claimed }, send: sendOnce)
                     .readingContent()
-                    .focused($focused)
-                    .scrollContentBackground(.hidden)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityLabel("Message")
                     .accessibilityIdentifier("composer-page-field")
                     .overlay(alignment: .topLeading) {
@@ -91,8 +93,11 @@ struct ComposerPageEditor: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
-            cursor = selection ?? TextSelection(insertionPoint: input.text.endIndex)
+            cursor = selection ?? NSRange(location: (input.text as NSString).length, length: 0)
             focused = input.acceptsInput
+        }
+        .onChange(of: input.canCommit) { _, current in
+            if !current { focused = false }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {

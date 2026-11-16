@@ -24,13 +24,33 @@ final class PhoneNotifications {
     @ObservationIgnored private var hosts: [LoomHost] = []
     @ObservationIgnored private var token: String?
     @ObservationIgnored private var last: Task<Void, Never>?
+    @ObservationIgnored private var pairingHosts: [UUID: Int] = [:]
+    @ObservationIgnored private var enableRequests: [UUID: UUID] = [:]
+    private struct AuthorizationRead {
+        let id = UUID()
+        let result: Task<UNAuthorizationStatus, Never>
+    }
+    @ObservationIgnored private var authorizationRead: AuthorizationRead?
+    @ObservationIgnored private var hasAuthorizationSnapshot = false
     private static let enabledKey = "argo.push.enabledHosts.v1"
     private static let registrationsKey = "argo.push.registrations.v1"
+    private static let registrationOwnerKey = "argo.push.registrationOwner.v1"
+
+    // This saved APNs address only identifies the owner of persisted receipts.
+    // Registration always waits for Apple's current-launch token callback.
+    private struct RegistrationOwner: Codable, Equatable {
+        let token: String
+        let environment: String
+        let topic: String
+    }
+    @ObservationIgnored private var registrationOwner: RegistrationOwner?
 
     private init() {
         enabledHosts = Set((UserDefaults.standard.stringArray(forKey: Self.enabledKey) ?? []).compactMap(UUID.init))
         registrations = UserDefaults.standard.data(forKey: Self.registrationsKey)
             .flatMap { try? JSONDecoder().decode([UUID: ArgoPushRegistration].self, from: $0) } ?? [:]
+        registrationOwner = UserDefaults.standard.data(forKey: Self.registrationOwnerKey)
+            .flatMap { try? JSONDecoder().decode(RegistrationOwner.self, from: $0) }
     }
 
     func attach(store: ArgoHostStore, makeConnection: @escaping AppModel.ConnectionFactory) {
@@ -49,7 +69,9 @@ final class PhoneNotifications {
     }
 
     func refresh() async {
-        authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        let read = startAuthorizationRead()
+        let status = await read.result.value
+        guard publishAuthorization(status, from: read) else { return }
         if Self.allowed(authorization) { authorizationProblem = nil }
         else if authorization == .denied, !enabledHosts.isEmpty {
             authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
@@ -61,38 +83,60 @@ final class PhoneNotifications {
                 if Self.allowed(authorization) { try await synchronize() }
                 else { await unregisterEnabled(keepIntent: true) }
             }
-        } catch { synchronizationProblem = error.localizedDescription }
+        } catch { synchronizationProblem = L10n.error(error) }
     }
 
     func setEnabled(_ enabled: Bool, host: LoomHost) async {
-        busy = true; defer { busy = false }
+        let request = UUID()
+        enableRequests[host.id] = enabled ? request : nil
+        busy = true
+        defer {
+            if enableRequests[host.id] == request { enableRequests.removeValue(forKey: host.id) }
+            busy = false
+        }
         do {
             if enabled {
-                let granted: Bool
-                do { granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
-                catch { authorizationProblem = error.localizedDescription; return }
-                authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-                guard granted else {
-                    authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
+                do { _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
+                catch {
+                    if enableRequests[host.id] == request { authorizationProblem = L10n.error(error) }
                     return
                 }
-                authorizationProblem = nil
-                // Persist intent before PUT: even a lost receipt must later be unregistered.
-                enabledHosts.insert(host.id); save()
-                UIApplication.shared.registerForRemoteNotifications()
-                try await sequence { [self] in try await synchronize() }
+                guard enableRequests[host.id] == request else { return }
+                startAuthorizationRead()
+                // A newer query replaces the snapshot, not the user's intent.
+                // Follow its existing task; never re-query or decide from the
+                // cache while that current result is still pending.
+                while let read = authorizationRead {
+                    let status = await read.result.value
+                    let current = publishAuthorization(status, from: read)
+                    guard enableRequests[host.id] == request else { return }
+                    guard current else { continue }
+                    guard Self.allowed(status) else {
+                        authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
+                        return
+                    }
+                    // Snapshot validation and intent admission share this
+                    // MainActor turn, before the next suspension at sequence.
+                    authorizationProblem = nil
+                    // Save before PUT: even a lost receipt needs cleanup later.
+                    enabledHosts.insert(host.id); save()
+                    UIApplication.shared.registerForRemoteNotifications()
+                    try await sequence { [self] in try await synchronize() }
+                    return
+                }
             } else {
                 try await sequence { [self] in try await unregister(host, keepIntent: false) }
             }
         } catch {
-            if enabled { synchronizationProblem = error.localizedDescription }
-            else { hostProblems[host.id] = host.displayName + ": " + error.localizedDescription }
+            if enabled { synchronizationProblem = L10n.error(error) }
+            else { hostProblems[host.id] = host.displayName + ": " + L10n.error(error) }
         }
     }
 
     /// Called before deleting the host credential. An offline failure keeps the
     /// credential and intent available so the user can retry the same DELETE.
     func forgetHost(_ id: UUID) async throws {
+        enableRequests.removeValue(forKey: id)
         do {
             try await sequence { [self] in
                 guard enabledHosts.contains(id) || registrations[id] != nil else { return }
@@ -101,41 +145,81 @@ final class PhoneNotifications {
                 }
                 try await unregister(host, keepIntent: false)
             }
-        } catch { hostProblems[id] = error.localizedDescription; throw error }
+        } catch { hostProblems[id] = L10n.error(error); throw error }
+    }
+
+    /// Re-pairing replaces a credential without changing the user's alert intent.
+    /// Pause immediately so an older PUT cannot publish while waiting for DELETE.
+    func prepareForPairing(_ id: UUID) async throws {
+        enableRequests.removeValue(forKey: id)
+        pairingHosts[id, default: 0] += 1
+        do {
+            try await sequence { [self] in
+                guard enabledHosts.contains(id) || registrations[id] != nil else { return }
+                guard let store, let host = try await store.hosts().first(where: { $0.id == id }) else {
+                    throw ArgoClientError.refusedLocally(.message("Select the paired host and retry notification removal."))
+                }
+                try await unregister(host, keepIntent: true)
+            }
+        } catch { hostProblems[id] = L10n.error(error); throw error }
+    }
+
+    /// The sequence owns this cleanup even when the pairing task was cancelled.
+    /// A failed PUT leaves enabledHosts and the visible error available for Retry.
+    func restoreAfterPairing(_ id: UUID) async {
+        if let remaining = pairingHosts[id], remaining > 1 {
+            pairingHosts[id] = remaining - 1
+            return
+        }
+        pairingHosts.removeValue(forKey: id)
+        do {
+            try await sequence { [self] in
+                guard let store else { throw ArgoClientError.closed }
+                hosts = try await store.hosts()
+                try await synchronize()
+            }
+        } catch { hostProblems[id] = L10n.error(error) }
     }
 
     func didRegister(_ data: Data) {
         let next = data.map { String(format: "%02x", $0) }.joined()
         guard !next.isEmpty else { return }
         if let token, token != next {
-            for id in enabledHosts { clearNotifications(host: id) }
+            for id in enabledHosts { clearNotifications(registrations[id]) }
             registrations.removeAll(); save()
         }
         token = next
         registrationProblem = nil
         Task {
             do { try await sequence { [self] in try await synchronize() } }
-            catch { synchronizationProblem = error.localizedDescription }
+            catch { synchronizationProblem = L10n.error(error) }
         }
     }
 
     func didFailRegistration() { registrationProblem = L10n.text("Apple could not register this signed app for notifications. Retry when connected.") }
 
     func receive(_ route: ArgoPushRoute) {
-        guard let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID),
-              receipt.deviceID == route.deviceID, receipt.registrationID == route.registrationID else { return }
+        guard isCurrentRegistration(route) else { return }
         pendingRoute = route
+    }
+
+    private func isCurrentRegistration(_ route: ArgoPushRoute) -> Bool {
+        // A cold-start alert may arrive before the first settings result.
+        guard !hasAuthorizationSnapshot || Self.allowed(authorization),
+              let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID) else { return false }
+        return receipt.enabled && receipt.hostID == route.hostID &&
+            receipt.deviceID == route.deviceID && receipt.registrationID == route.registrationID
     }
 
     func takeRoute(hosts: [LoomHost]) -> ArgoPushRoute? {
         guard let route = pendingRoute else { return nil }
         pendingRoute = nil
-        guard let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID), route.matches(receipt, hosts: hosts) else { return nil }
+        guard isCurrentRegistration(route), let receipt = registrations[route.hostID], route.matches(receipt, hosts: hosts) else { return nil }
         return route
     }
 
     func trusted(_ route: ArgoPushRoute) -> Bool {
-        guard let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID) else { return false }
+        guard isCurrentRegistration(route), let receipt = registrations[route.hostID] else { return false }
         return route.matches(receipt, hosts: hosts)
     }
 
@@ -145,28 +229,49 @@ final class PhoneNotifications {
               ["sandbox", "production"].contains(environment), let topic = Bundle.main.bundleIdentifier else {
             throw ArgoClientError.refusedLocally(.message("The signed app needs an explicit APNs environment and bundle topic."))
         }
+        let owner = RegistrationOwner(token: token, environment: environment, topic: topic)
+        if registrationOwner != owner {
+            // A PUT may rotate the host's registration even when its reply is
+            // lost. Retire the previous owner before starting that request,
+            // including the first token callback after a process restart.
+            for receipt in registrations.values { clearNotifications(receipt) }
+            registrations.removeAll()
+            registrationOwner = owner
+            save()
+        }
         let currentHosts = try await store.hosts()
+        hosts = currentHosts
         synchronizationProblem = nil
-        for host in currentHosts where enabledHosts.contains(host.id) {
+        for host in currentHosts where enabledHosts.contains(host.id) && pairingHosts[host.id] == nil {
             do {
                 let credential = try await store.credential(for: host)
+                guard Self.allowed(authorization), token == self.token,
+                      enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
                 let client = try makeConnection(host, credential)
                 let receipt: ArgoPushRegistration
                 do { receipt = try await client.registerNotifications(token: token, environment: environment, topic: topic, credential: credential) }
                 catch { await client.close(); throw error }
                 await client.close()
-                guard token == self.token, enabledHosts.contains(host.id) else { continue }
-                if registrations[host.id] != receipt { clearNotifications(host: host.id) }
+                guard Self.allowed(authorization), token == self.token,
+                      enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
+                // Host metadata and the secret may change while the PUT is in flight.
+                // Validate both again before accepting its receipt for this UUID.
+                guard try await store.credential(for: host) == credential else {
+                    throw ArgoClientError.needsPairing(.message("This host was removed or paired again. Select the host again."))
+                }
+                guard Self.allowed(authorization), token == self.token,
+                      enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
+                if registrations[host.id] != receipt { clearNotifications(registrations[host.id]) }
                 registrations[host.id] = receipt; save()
                 hostProblems.removeValue(forKey: host.id)
-            } catch { hostProblems[host.id] = host.displayName + ": " + error.localizedDescription }
+            } catch { hostProblems[host.id] = host.displayName + ": " + L10n.error(error) }
         }
     }
 
     private func unregisterEnabled(keepIntent: Bool) async {
         for host in hosts where enabledHosts.contains(host.id) || registrations[host.id] != nil {
             do { try await unregister(host, keepIntent: keepIntent) }
-            catch { hostProblems[host.id] = host.displayName + ": " + error.localizedDescription }
+            catch { hostProblems[host.id] = host.displayName + ": " + L10n.error(error) }
         }
     }
 
@@ -175,12 +280,16 @@ final class PhoneNotifications {
         let credential = try await store.credential(for: host)
         let client = try makeConnection(host, credential)
         do { try await client.unregisterNotifications(credential: credential) }
+        catch ArgoClientError.needsPairing(.gateway(.unauthorized)) {
+            // The gateway rejected this pairing. Revoked devices are excluded
+            // from host-side push delivery, so local removal can finish.
+        }
         catch { await client.close(); throw error }
         await client.close()
-        registrations.removeValue(forKey: host.id)
+        let removed = registrations.removeValue(forKey: host.id)
         if !keepIntent { enabledHosts.remove(host.id) }
         if pendingRoute?.hostID == host.id { pendingRoute = nil }
-        clearNotifications(host: host.id); save()
+        clearNotifications(removed); save()
         hostProblems.removeValue(forKey: host.id)
     }
 
@@ -194,20 +303,58 @@ final class PhoneNotifications {
     private func save() {
         UserDefaults.standard.set(enabledHosts.map(\.uuidString), forKey: Self.enabledKey)
         if let data = try? JSONEncoder().encode(registrations) { UserDefaults.standard.set(data, forKey: Self.registrationsKey) }
+        // Persist retired receipts before their new owner.
+        if let registrationOwner, let data = try? JSONEncoder().encode(registrationOwner) {
+            UserDefaults.standard.set(data, forKey: Self.registrationOwnerKey)
+        }
     }
 
-    private func clearNotifications(host: UUID) {
+    private func clearNotifications(_ registration: ArgoPushRegistration?) {
+        // Only this retired receipt owns cleanup. A new PUT can already have
+        // delivered alerts before its receipt is available on the phone.
+        guard let registration else { return }
         let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { delivered in
-            center.removeDeliveredNotifications(withIdentifiers: delivered.filter {
-                ArgoPushRoute.decode($0.request.content.userInfo)?.hostID == host
-            }.map { $0.request.identifier })
+        center.getDeliveredNotifications { [weak self] delivered in
+            let routes = delivered.map { ($0.request.identifier, ArgoPushRoute.decode($0.request.content.userInfo)) }
+            Task { @MainActor in
+                guard let self else { return }
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: self.obsoleteNotifications(routes, registration: registration))
+            }
         }
-        center.getPendingNotificationRequests { pending in
-            center.removePendingNotificationRequests(withIdentifiers: pending.filter {
-                ArgoPushRoute.decode($0.content.userInfo)?.hostID == host
-            }.map(\.identifier))
+        center.getPendingNotificationRequests { [weak self] pending in
+            let routes = pending.map { ($0.identifier, ArgoPushRoute.decode($0.content.userInfo)) }
+            Task { @MainActor in
+                guard let self else { return }
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: self.obsoleteNotifications(routes, registration: registration))
+            }
         }
+    }
+
+    private func obsoleteNotifications(_ routes: [(String, ArgoPushRoute?)], registration: ArgoPushRegistration) -> [String] {
+        routes.compactMap { identifier, route in
+            guard let route, route.hostID == registration.hostID,
+                  route.deviceID == registration.deviceID,
+                  route.registrationID == registration.registrationID else { return nil }
+            return identifier
+        }
+    }
+
+    @discardableResult
+    private func startAuthorizationRead() -> AuthorizationRead {
+        let read = AuthorizationRead(result: Task {
+            await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        })
+        authorizationRead = read
+        return read
+    }
+
+    private func publishAuthorization(_ status: UNAuthorizationStatus, from read: AuthorizationRead) -> Bool {
+        // Permission is global; its newest result remains useful even when the
+        // host action that requested it has since been cancelled.
+        guard read.id == authorizationRead?.id else { return false }
+        authorization = status
+        hasAuthorizationSnapshot = true
+        return true
     }
 
     private static func allowed(_ status: UNAuthorizationStatus) -> Bool {

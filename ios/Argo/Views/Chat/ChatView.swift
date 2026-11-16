@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 struct ChatView: View {
     @Bindable var state: ConversationState
     @Environment(AppModel.self) private var model
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var following = true
     @State private var progressPresentation = SeenPresentation()
@@ -22,6 +21,9 @@ struct ChatView: View {
     @State private var pickerIdentity: ArgoAgentIdentity?
     @State private var preview: AttachmentPreview?
     @State private var inputOwner: ComposerInputOwner?
+    @State private var nativeToHide: (item: ArgoQueuedMessage, key: SessionKey)?
+    @State private var queuePresentation = SeenPresentation()
+    @State private var historyPresentation = SeenPresentation()
 
     private var attachPresentation: SeenPresentation { attachPanel.presentation }
 
@@ -36,7 +38,7 @@ struct ChatView: View {
                             Text("First message submitted with creation. Delivery has no separate receipt; check the Agent's native conversation.")
                                 .font(Theme.Font.caption).foregroundStyle(.secondary)
                             if let text = creation.text {
-                                Text(verbatim: text).font(Theme.Font.secondary).textSelection(.enabled)
+                                Text(verbatim: text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
                                 Button("Copy First Message") { UIPasteboard.general.string = text }
                             } else {
                                 Text("The original first message was kept only in memory and is unavailable after restarting the app.")
@@ -90,11 +92,12 @@ struct ChatView: View {
                         QuestionCard(ask: ask, state: state).id(ask.uiID)
                     }
                     queue
-                    if !state.deliveries.isEmpty {
+                    if !state.deliveryReceipts.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.s) {
                             Text("Delivery Receipts").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
-                            ForEach(state.deliveries) { message in
-                                PendingBubble(message: message, retry: { model.retry(message) }, refresh: { model.showLatest() }, preview: openLocal)
+                            ForEach(state.deliveryReceipts) { message in
+                                PendingBubble(message: message, currentIdentity: state.transcript.identity,
+                                              retry: { model.retry(message) }, refresh: { model.showLatest() }, preview: openLocal)
                             }
                         }
                     }
@@ -130,6 +133,12 @@ struct ChatView: View {
             }
         }
         .background(Theme.pageBackground)
+        .confirmationDialog("Hide Handoff Record?", isPresented: Binding(get: { nativeToHide != nil }, set: { if !$0 { nativeToHide = nil } }),
+                            titleVisibility: .visible, presenting: nativeToHide) { selection in
+            Button("Hide Record", role: .destructive) { model.hideNativeHandoff(selection.item, for: selection.key) }
+        } message: { _ in
+            Text("This only hides the Argo status record. It does not cancel or retract input already received by Codex.")
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .navigationTitle(model.selectedAgent?.displayTitle ?? L10n.text("Conversation"))
         .navigationBarTitleDisplayMode(.inline)
@@ -204,6 +213,16 @@ struct ChatView: View {
             }, onCancellation: { filesPresentation.setPresented(false, in: model) })
         }
         .sheet(item: $preview, onDismiss: { previewPresentation.didDismiss(in: model) }) { AttachmentViewer(preview: $0) }
+        .sheet(item: Binding(get: { state.queueItemRead }, set: { value in
+            if value == nil, let read = state.queueItemRead { model.closeQueueItem(read) }
+        }), onDismiss: { queuePresentation.didDismiss(in: model) }) { read in
+            QueueFullMessageView(read: read)
+        }
+        .sheet(item: Binding(get: { state.nativeHistoryRead }, set: { value in
+            if value == nil, let read = state.nativeHistoryRead { model.closeNativeHistory(read) }
+        }), onDismiss: { historyPresentation.didDismiss(in: model) }) { read in
+            NativeHistoryView(read: read)
+        }
         .environment(\.openURL, OpenURLAction { url in
             openMessageURL(url, item: nil, key: fileKey, identity: fileIdentity)
         })
@@ -218,8 +237,8 @@ struct ChatView: View {
         .onChange(of: model.selectedKey) { _, key in
             if key != state.key { inputOwner?.invalidate() }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { renewInputOwner() }
+        .onChange(of: model.acceptsComposerInput) { _, active in
+            if active { renewInputOwner() }
         }
     }
 
@@ -243,7 +262,7 @@ struct ChatView: View {
                 let target = inputOwner.state
                 let identity = target.transcript.identity
                 PromptComposer(placeholder: model.selectedAgent?.state == "working" ? L10n.text("Add a note (queued)") : L10n.text("Message Agent"),
-                           input: inputOwner,
+                           input: inputOwner, renewInputOwner: renewInputOwner,
                            canSend: model.status.isConnected && state.canSendToIdentity && !state.isSending && !state.isInterruptBusy &&
                                (!state.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !state.attachments.isEmpty),
                            sending: state.isMessageSending, showsStop: model.showsInterrupt || state.isInterruptBusy,
@@ -278,11 +297,14 @@ struct ChatView: View {
     }
 
     private func renewInputOwner() {
-        guard inputOwner?.acceptsInput != true else { return }
+        guard model.acceptsComposerInput, model.selectedKey == state.key, model.conversation === state,
+              inputOwner?.acceptsInput != true else { return }
         inputOwner?.invalidate()
         let target = state
+        let generation = target.nativeConversationGeneration
         inputOwner = ComposerInputOwner(state: target,
-            destinationIsCurrent: { model.selectedKey == target.key && model.conversation === target },
+            destinationIsCurrent: { model.selectedKey == target.key && model.conversation === target &&
+                target.nativeConversationGeneration == generation },
             foreground: { model.acceptsComposerInput })
     }
 
@@ -346,19 +368,273 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var queue: some View {
-        if let queue = state.queue, !queue.items.isEmpty {
+        if let problem = state.nativeHideProblem {
+            NoticeBanner(text: problem, tone: .caution, lineLimit: nil) {
+                Button("Refresh Conversation") { model.refreshConversation() }
+            }
+        }
+        if let queue = state.queue, state.pendingQueueCount > 0 || !state.ordinaryQueueItems.isEmpty {
             DisclosureGroup {
                 if !queue.hold.isEmpty { Text(verbatim: queue.hold).font(Theme.Font.caption).foregroundStyle(.secondary) }
-                ForEach(queue.items) { item in
-                    Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.enabled)
-                        .padding(.vertical, Theme.Space.xs)
+                if !queue.truncatedFields.isEmpty { Text("Queue details are a shortened preview.").font(Theme.Font.caption).foregroundStyle(.secondary) }
+                ForEach(state.ordinaryQueueItems) { item in
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        if let reason = state.deliveryUnknown(for: item) {
+                            Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
+                                .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
+                            Text(verbatim: reason).font(Theme.Font.caption).foregroundStyle(.secondary)
+                                .readingContent()
+                        }
+                        queueMessage(item)
+                    }
+                    .padding(.vertical, Theme.Space.xs)
                 }
             } label: {
-                Label("\(queue.items.count) messages queued on host", systemImage: Theme.Icon.time)
-                    .font(Theme.Font.captionStrong)
+                if state.ordinaryQueueItems.contains(where: { state.deliveryUnknown(for: $0) != nil }) {
+                    Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
+                        .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
+                } else {
+                    Label("\(state.pendingQueueCount) messages queued on host", systemImage: Theme.Icon.time)
+                        .font(Theme.Font.captionStrong)
+                }
             }
             .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+        }
+        if state.nativeHistoryCount > 0 {
+            DisclosureGroup {
+                ForEach(state.nativeQueueItems) { item in
+                    if let native = item.native {
+                        VStack(alignment: .leading, spacing: Theme.Space.s) {
+                            Label(L10n.text(native.state == .accepted ? "Codex Received" : "Native Receipt Unknown"),
+                                  systemImage: native.state == .accepted ? "tray" : Theme.Icon.warning)
+                                .font(Theme.Font.captionStrong)
+                            NativeHandoffDetails(native: native, target: item.target, currentIdentity: state.transcript.identity)
+                            queueMessage(item)
+                            HStack(spacing: Theme.Space.l) {
+                                Button("Hide Record") { nativeToHide = (item, state.key) }
+                                    .disabled(state.hidingNativeIDs.contains(item.id) || !model.status.isConnected)
+                                    .tapTargetHeight()
+                            }
+                            .font(Theme.Font.captionStrong)
+                        }
+                        .padding(.vertical, Theme.Space.s)
+                    }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Label("Native records: \(state.nativeHistoryCount)", systemImage: "tray")
+                    if state.nativeQueueItems.contains(where: { $0.native?.state == .unknown }) {
+                        Label("Native Receipt Unknown", systemImage: Theme.Icon.warning).foregroundStyle(Theme.cautionText)
+                    }
+                }
+                .font(Theme.Font.captionStrong)
+            }
+            .padding(Theme.Space.m)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+        }
+        if !state.nativeHistorySources.isEmpty || model.sourceHistoryProblem != nil {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Label("Records Before Resume", systemImage: "clock.arrow.circlepath")
+                    .font(Theme.Font.captionStrong)
+                Text("Read-only records from the original conversation. These are not pending messages or confirmation of model completion.")
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                if let problem = model.sourceHistoryProblem {
+                    NoticeBanner(text: L10n.text("Some earlier records could not be loaded. Current messages and receipts remain available.") + "\n" + problem,
+                                 tone: .caution, lineLimit: nil) {
+                        Button("Refresh Records") { model.refreshConversation() }
+                            .disabled(!model.status.isConnected)
+                    }
+                }
+                ForEach(Array(state.nativeHistorySources.enumerated()), id: \.offset) { _, source in
+                    Button {
+                        guard historyPresentation.owner == nil else { return }
+                        model.openNativeHistory(source, for: state.key)
+                        if state.nativeHistoryRead != nil { historyPresentation.cover(in: model, conversation: state.key) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                                Text(verbatim: source.sourceRun).lineLimit(2)
+                                Text("Read-only records: \(source.nativeHistory)").font(Theme.Font.caption)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).tapTargetHeight()
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.status.isConnected)
+                }
+            }
+            .padding(Theme.Space.m)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+        }
+    }
+
+    @ViewBuilder private func queueMessage(_ item: ArgoQueuedMessage) -> some View {
+        if item.isIncomplete {
+            Text("Shortened preview — original content remains on the host.")
+                .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+        }
+        Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.disabled)
+        HStack(spacing: Theme.Space.l) {
+            Button("Copy Full Message") { openQueueItem(item, copy: true) }.disabled(!model.status.isConnected).tapTargetHeight()
+            Button("View Full Message") { openQueueItem(item, copy: false) }.disabled(!model.status.isConnected).tapTargetHeight()
+        }
+        .font(Theme.Font.captionStrong)
+    }
+
+    private func openQueueItem(_ item: ArgoQueuedMessage, copy: Bool) {
+        guard queuePresentation.owner == nil else { return }
+        model.openQueueItem(item, for: state.key, copy: copy)
+        if state.queueItemRead != nil { queuePresentation.cover(in: model, conversation: state.key) }
+    }
+}
+
+private struct NativeHistoryView: View {
+    @Bindable var read: NativeHistoryRead
+    @Environment(AppModel.self) private var model
+    @State private var recordToRemove: ArgoQueuedMessage?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
+                    Text("Read-only records from the original conversation. These are not pending messages or confirmation of model completion.")
+                        .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                    Text(verbatim: [read.key.workspace, read.source.sourceRun, read.source.target.engine,
+                                    read.source.target.session].joined(separator: "\n"))
+                        .font(Theme.Font.caption).readingContent().textSelection(.enabled)
+                    if read.loading { ProgressView("Loading Original Records…") }
+                    if let problem = read.problem {
+                        NoticeBanner(text: L10n.text("Original records could not be loaded.") + "\n" + problem,
+                                     tone: .caution, lineLimit: nil)
+                    }
+                    if let problem = read.hideProblem {
+                        NoticeBanner(text: problem, tone: .caution, lineLimit: nil)
+                    }
+                    if let problem = read.queue?.nativeSourcesError, !problem.isEmpty {
+                        NoticeBanner(text: L10n.text("Some earlier records could not be loaded. Current messages and receipts remain available.") + "\n" + problem,
+                                     tone: .caution, lineLimit: nil)
+                    }
+                    if !read.loading {
+                        Button("Refresh Records") { model.refreshNativeHistory(read) }
+                            .disabled(!model.status.isConnected || !read.hidingIDs.isEmpty).tapTargetHeight()
+                    }
+                    ForEach(read.rows) { item in
+                        VStack(alignment: .leading, spacing: Theme.Space.s) {
+                            if let native = item.native {
+                                Label(L10n.text(native.state == .accepted ? "Codex Received" : "Native Receipt Unknown"),
+                                      systemImage: native.state == .accepted ? "tray" : Theme.Icon.warning)
+                                    .font(Theme.Font.captionStrong)
+                                NativeHandoffDetails(native: native, target: item.target, currentIdentity: read.source.target)
+                            } else {
+                                Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
+                                    .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
+                                Text("The original terminal may have received this input. Review the original conversation before sending it again.")
+                                    .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                                Text(verbatim: item.deliveryUnknown).font(Theme.Font.caption).readingContent()
+                            }
+                            if item.isIncomplete {
+                                Text("Shortened preview — original content remains on the host.")
+                                    .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+                            }
+                            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.disabled)
+                            HStack(spacing: Theme.Space.l) {
+                                Button("Copy Full Message") { model.openNativeHistoryItem(item, in: read, copy: true) }.tapTargetHeight()
+                                Button("View Full Message") { model.openNativeHistoryItem(item, in: read) }.tapTargetHeight()
+                            }
+                            .font(Theme.Font.captionStrong).disabled(!model.status.isConnected)
+                            Group {
+                                if item.native != nil {
+                                    Button("Hide Record") { recordToRemove = item }.tapTargetHeight()
+                                } else {
+                                    Button("Remove Record") { recordToRemove = item }.tapTargetHeight()
+                                }
+                            }
+                            // Confirmation uses the original row; the model rechecks
+                            // its source owner and routes Native/ordinary separately.
+                            .font(Theme.Font.captionStrong)
+                            .disabled(!model.status.isConnected || read.hidingIDs.contains(item.id) || read.hideProblem != nil)
+                        }
+                        .padding(Theme.Space.m)
+                        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
+                    }
+                    if !read.loading, read.problem == nil, read.rows.isEmpty {
+                        Text("No remaining visible records for this source. Refresh the conversation to update its sources.")
+                            .font(Theme.Font.caption).readingContent()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.Space.m)
+            }
+            .navigationTitle("Records Before Resume")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.closeNativeHistory(read) } } }
+        }
+        .confirmationDialog(L10n.text(recordToRemove?.native == nil ? "Remove Unknown Delivery Record?" : "Hide Handoff Record?"),
+                            isPresented: Binding(get: { recordToRemove != nil }, set: { if !$0 { recordToRemove = nil } }),
+                            titleVisibility: .visible, presenting: recordToRemove) { item in
+            if item.native != nil {
+                Button("Hide Record", role: .destructive) { model.hideNativeHistoryItem(item, in: read) }
+            } else {
+                Button("Remove Record", role: .destructive) { model.removeUnknownHistoryItem(item, in: read) }
+            }
+        } message: { item in
+            if item.native != nil {
+                Text("This only hides the Argo status record. It does not cancel or retract input already received by Codex.")
+            } else {
+                Text("This removes only the Argo record. It does not stop or retract input that may have reached the original terminal.")
+            }
+        }
+        .sheet(item: Binding(get: { read.queueItemRead }, set: { value in
+            if value == nil, let full = read.queueItemRead { model.closeQueueItem(full) }
+        })) { full in
+            QueueFullMessageView(read: full)
+        }
+    }
+}
+
+private struct QueueFullMessageView: View {
+    @Bindable var read: QueueItemRead
+    @Environment(AppModel.self) private var model
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    if let problem = read.problem {
+                        Text("The complete message could not be loaded. The queue record is unchanged.").font(Theme.Font.captionStrong)
+                        Text(verbatim: problem).readingContent()
+                    } else if let item = read.item {
+                        if item.isIncomplete {
+                            Text("Queue details are a shortened preview.").font(Theme.Font.caption).foregroundStyle(.secondary)
+                        }
+                        if let native = item.native {
+                            NativeHandoffDetails(native: native, target: item.target, currentIdentity: read.identity)
+                        } else {
+                            Text("Original Conversation").font(Theme.Font.captionStrong)
+                            Text(verbatim: [read.key.workspace, read.run, item.target?.session ?? ""].filter { !$0.isEmpty }.joined(separator: "\n"))
+                                .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                        }
+                        Text(verbatim: item.text).readingContent().textSelection(.enabled)
+                        if !item.deliveryUnknown.isEmpty { Text(verbatim: item.deliveryUnknown).readingContent() }
+                        Button {
+                            if let text = model.queueItemText(read) { UIPasteboard.general.string = text; copied = true }
+                        } label: { Label("Copy", systemImage: Theme.Icon.copy) }
+                        .tapTargetHeight()
+                        if copied { Text("Copied").font(Theme.Font.caption).foregroundStyle(.secondary) }
+                    } else { ProgressView("Loading Full Message…") }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.Space.m)
+            }
+            .navigationTitle("Full Message")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.closeQueueItem(read) } } }
+        }
+        .onChange(of: read.item, initial: true) { _, _ in
+            guard read.copyWhenLoaded, !copied, let text = model.queueItemText(read) else { return }
+            UIPasteboard.general.string = text
+            copied = true
         }
     }
 }

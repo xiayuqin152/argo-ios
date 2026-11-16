@@ -49,7 +49,9 @@ private struct ArgoBootstrap: View {
                 try ArgoConnection(host: host, credential: credential)
             }
             model?.unregisterNotifications = { id in try await PhoneNotifications.shared.forgetHost(id) }
+            model?.prepareNotificationsForPairing = { id in try await PhoneNotifications.shared.prepareForPairing(id) }
+            model?.restoreNotificationsAfterPairing = { id in await PhoneNotifications.shared.restoreAfterPairing(id) }
             problem = nil
-        } catch { problem = error.localizedDescription }
+        } catch { problem = L10n.error(error) }
     }
 }

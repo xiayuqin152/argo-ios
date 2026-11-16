@@ -54,7 +54,7 @@ struct SettingsView: View {
                 }
                 Section("Notifications") {
                     if let host = model.selectedHost {
-                        Toggle("Agent Alerts on This iPhone", isOn: Binding(
+                        Toggle("Agent Alerts on This Device", isOn: Binding(
                             get: { PhoneNotifications.shared.enabledHosts.contains(host.id) },
                             set: { value in Task { await PhoneNotifications.shared.setEnabled(value, host: host) } }))
                             .disabled(PhoneNotifications.shared.busy)

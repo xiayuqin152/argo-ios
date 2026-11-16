@@ -64,9 +64,9 @@ public enum ArgoClientError: Error, LocalizedError, Equatable, Sendable {
         }
     }
 
-    /// Whether a failed send may still have been delivered. Only
-    /// `deliveryUnknown`, or a server failure that could follow a partial
-    /// PTY write. Client error statuses such as 401 and 409 refuse delivery.
+    /// Whether a failed write may have reached the Agent. Endpoints that can
+    /// return conflicts after input wrap them in `deliveryUnknown`; a raw HTTP
+    /// status alone does not prove that no input was written.
     public var mayHaveBeenDelivered: Bool {
         if case .deliveryUnknown = self { return true }
         if case .http(let status, _, _) = self { return status >= 500 }

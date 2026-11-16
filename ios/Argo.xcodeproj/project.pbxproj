@@ -14,6 +14,7 @@
 		07DED39F74EB0C8E89DB083A /* ReplyBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F9AA97EE369F8CA6117E03 /* ReplyBlocks.swift */; };
 		0F33E997A108860B79DCE48F /* TypedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD258AC9FAD479F354BA246A /* TypedText.swift */; };
 		12E1861F7A7F71BDA453838B /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5476DF94D49F55551FC0F5C7 /* Components.swift */; };
+		13672FECC1A0A912B47D3D93 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CEE767FD33864CB8EAF5DEA9 /* PrivacyInfo.xcprivacy */; };
 		1490BC2F1CDD7E158B61F3B7 /* Persona-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = C1561344AF344D991C0C0AFC /* Persona-LICENSE.txt */; };
 		1C87BB8C0FA6A7174CAD580F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB0FAEFD3F0B3A83734A327 /* ChatView.swift */; };
 		21CC358104BB5E3360031BDA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BE413F4EB8A4A2B0E9C5CE /* SettingsView.swift */; };
@@ -107,6 +108,7 @@
 		C2B7ED034B4F42E44CD0B630 /* Argo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Argo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CD15F7EABAE03369FA5A1865 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		CEE763B4FEE14D17D93570CE /* TurnAttachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnAttachments.swift; sourceTree = "<group>"; };
+		CEE767FD33864CB8EAF5DEA9 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D576C08CD1593061C59B8199 /* CapsuleFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapsuleFilterBar.swift; sourceTree = "<group>"; };
 		D5F1E76F424A03BCB7F885DB /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = en; path = en.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
 		D62C047E91D085D0FDA66ED1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -325,6 +327,7 @@
 				0E7AD44894685F79CE53F9AD /* Licenses */,
 				F26FC963A510E99A69467AAD /* Localizable.strings */,
 				EDBD3FEC5D74A5282ED22EDB /* Localizable.stringsdict */,
+				CEE767FD33864CB8EAF5DEA9 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -430,6 +433,7 @@
 				879BA23CAC38EFAD2C399694 /* Localizable.strings in Resources */,
 				02DB613F651A8EE238FAE3A4 /* Localizable.stringsdict in Resources */,
 				1490BC2F1CDD7E158B61F3B7 /* Persona-LICENSE.txt in Resources */,
+				13672FECC1A0A912B47D3D93 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

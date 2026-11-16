@@ -106,7 +106,24 @@ jobs:
             "$RUNNER_TEMP/argo-ios/packages/"*.ipa \
             > "$RUNNER_TEMP/argo-ios/logs/packages.sha256"
 
-      - name: Preserve any xcresult bundle
+      - name: Validate the unsigned iPhone package
+        run: |
+          set -euo pipefail
+          python3 ios/scripts/check_package.py \
+            --archive-app "$RUNNER_TEMP/argo-ios/Argo-iphoneos-unsigned.xcarchive/Products/Applications/Argo.app" \
+            --ipa "$RUNNER_TEMP/argo-ios/packages/Argo-unsigned.ipa" \
+            --summary "$RUNNER_TEMP/argo-ios/logs/package-check.json" \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/package-check.log"
+
+      - name: Run native UIKit input tests on an available Simulator
+        run: |
+          set -euo pipefail
+          RETURN_EVENT_LOG_DIR="$RUNNER_TEMP/argo-ios/logs" \
+            RETURN_EVENT_XCRESULT="$RUNNER_TEMP/argo-ios/results/ReturnEventTests.xcresult" \
+            bash research/return-event/run-sdk-checks.sh auto test \
+            2>&1 | tee "$RUNNER_TEMP/argo-ios/logs/uikit-input-tests.log"
+
+      - name: Preserve xcresult bundles
         if: always()
         run: |
           set -euo pipefail
@@ -115,7 +132,14 @@ jobs:
               -czf "$RUNNER_TEMP/argo-ios/packages/Argo-archive.xcresult.tar.gz" \
               Argo-archive.xcresult
           else
-            printf '%s\n' 'No xcresult bundle was produced.'
+            printf '%s\n' 'No Argo-archive.xcresult bundle was produced.'
+          fi
+          if [ -d "$RUNNER_TEMP/argo-ios/results/ReturnEventTests.xcresult" ]; then
+            tar -C "$RUNNER_TEMP/argo-ios/results" \
+              -czf "$RUNNER_TEMP/argo-ios/packages/ReturnEventTests.xcresult.tar.gz" \
+              ReturnEventTests.xcresult
+          else
+            printf '%s\n' 'No ReturnEventTests.xcresult bundle was produced.'
           fi
 
       - name: Upload existing outputs and logs
@@ -129,3 +153,30 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
           compression-level: 0
+
+  mobile-contract:
+    runs-on: ubuntu-24.04
+    container: swift:6.2.4
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run the mobile delivery contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install --yes --no-install-recommends python3
+          core="$RUNNER_TEMP/argo-mobile-core"
+          swift build --package-path ios/Packages/ArgoMobileKit \
+            --scratch-path "$core" --jobs 2
+          python3 research/mobile-delivery-221c/check_mobile_delivery.py \
+            --swiftc "$(command -v swiftc)" --core-build "$core" \
+            --output "$RUNNER_TEMP/mobile-delivery"
+          python3 ios/scripts/check_notification_repair.py \
+            --swiftc "$(command -v swiftc)" --core-build "$core/debug" \
+            --output "$RUNNER_TEMP/notification-repair"
+          python3 ios/scripts/check_notification_authorization.py \
+            --swiftc "$(command -v swiftc)" --core-build "$core/debug" \
+            --output "$RUNNER_TEMP/notification-authorization"

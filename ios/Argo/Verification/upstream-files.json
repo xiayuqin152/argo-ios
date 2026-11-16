@@ -174,7 +174,7 @@
           "blob": "8311f503c935f723cad12f5743dbc3d2f0fb0147"
         }
       ],
-      "adaptation": "保留发送前 unmarkText 及 UITextInput 全文同步；仅读取有焦点的目标框，selector 用 Argo 前缀。; Optional ReturnSends #8202 (off by default), current IME and input/modal ownership preserved."
+      "adaptation": "保留发送前 unmarkText 及 UITextInput 全文同步；仅读取有焦点的目标框，selector 用 Argo 前缀。; Optional ReturnSends #8202 (off by default), current IME and input/modal ownership preserved. Argo also checks left/right Option in the missed-key-event newline path; the existing composing guards are unchanged."
     },
     {
       "path": "ios/Argo/Views/RootView.swift",

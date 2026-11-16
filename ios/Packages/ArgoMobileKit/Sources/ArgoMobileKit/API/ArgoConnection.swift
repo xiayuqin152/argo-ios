@@ -206,7 +206,53 @@ public actor ArgoConnection {
     }
 
     public func queue(run: String) async throws -> ArgoQueue {
-        try await get("/api/agents/\(try Self.managedSegment(run))/queue")
+        let response = try await perform(HTTPRequest(method: "GET", target: "/api/agents/\(try Self.managedSegment(run))/queue?bounded=1",
+                                                    maxResponseBodyBytes: ArgoQueue.previewByteLimit - 1), authRetry: true)
+        try validateQueuePreview(response, write: false)
+        return try decode(response)
+    }
+
+    /// Read-only, complete original content. This endpoint has no bounded mode.
+    public func queueItem(run: String, itemID: String) async throws -> ArgoQueueItemDetail {
+        let runPath = try Self.managedSegment(run)
+        guard !itemID.isEmpty else { throw ArgoClientError.refusedLocally(.message("The queue item has no identifier. Refresh the conversation.")) }
+        let response = try await perform(HTTPRequest(method: "GET", target: "/api/agents/\(runPath)/queue/\(Self.segment(itemID))",
+                                                    maxResponseBodyBytes: HTTPResponseParser.defaultMaxBody - 1), authRetry: true)
+        let result: ArgoQueueItemDetail = try decode(response)
+        guard response.body.count < HTTPResponseParser.defaultMaxBody, result.run == run,
+              result.identity.run == run, result.item.id == itemID else {
+            throw ArgoClientError.invalidResponse(.message("The queue item changed. Refresh the conversation."))
+        }
+        return result
+    }
+
+    /// Removes an ordinary queue record, including a held deliveryUnknown item.
+    /// Pass its original run and ID. Removal does not retract possible input;
+    /// native handoffs use hideNativeHandoff instead. No write is replayed.
+    public func removeQueueItem(run: String, itemID: String) async throws -> ArgoQueue {
+        let runPath = try Self.managedSegment(run)
+        guard !itemID.isEmpty else {
+            throw ArgoClientError.refusedLocally(.message("The queue item has no identifier. Refresh the conversation."))
+        }
+        let response = try await perform(HTTPRequest(method: "DELETE", target: "/api/agents/\(runPath)/queue/\(Self.segment(itemID))?bounded=1",
+                                                    maxResponseBodyBytes: ArgoQueue.previewByteLimit - 1), authRetry: false)
+        try validateQueuePreview(response, write: true)
+        let result: ArgoQueue = try receipt(response)
+        guard result.run == run, result.identity?.run == run else {
+            throw ArgoClientError.invalidResponse(.message("The queue item changed. Refresh the conversation."))
+        }
+        return result
+    }
+
+    /// Hides only an Argo native handoff record. Codex input is not retracted.
+    /// No resend, auth replay, or assumed response body is involved.
+    public func hideNativeHandoff(run: String, itemID: String) async throws {
+        let run = try Self.managedSegment(run)
+        guard !itemID.isEmpty else {
+            throw ArgoClientError.refusedLocally(.message("The handoff record has no identifier. Refresh the conversation."))
+        }
+        _ = try await perform(HTTPRequest(method: "DELETE", target: "/api/agents/\(run)/queue/\(Self.segment(itemID))/native?bounded=1",
+                                         maxResponseBodyBytes: ArgoQueue.previewByteLimit - 1), authRetry: false)
     }
 
     // MARK: Read markers
@@ -387,11 +433,21 @@ public actor ArgoConnection {
         if let target = message.target {
             body["target"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(target))
         }
-        let response = try await write("/api/agents/\(segment)/queue", body: body, attempt: message.attempt)
+        let response: HTTPResponse
+        do {
+            response = try await write("/api/agents/\(segment)/queue?bounded=1", body: body, attempt: message.attempt,
+                                       maxResponseBodyBytes: ArgoQueue.previewByteLimit - 1)
+        } catch let error as ArgoClientError {
+            // A queue conflict can follow a successful paste whose Enter was
+            // held. Without proof of zero input, keep this delivery unknown.
+            guard case .http(status: 409, _, _) = error else { throw error }
+            throw ArgoClientError.deliveryUnknown(.detail(error.localizedDescription))
+        }
+        try validateQueuePreview(response, write: true)
         let result: DeliverResult = try receipt(response)
         return ArgoSendReceipt(run: message.run, attempt: message.attempt, delivered: result.delivered,
                                queued: result.item, queue: result.queue, pasted: result.pasted, note: result.note,
-                               duplicate: response.header("X-Loom-Duplicate") == "1")
+                               duplicate: response.header("X-Loom-Duplicate") == "1", truncatedFields: result.truncatedFields)
     }
 
     /// Answers one waiting question with the CLI's own keys
@@ -486,11 +542,12 @@ public actor ArgoConnection {
         try decode(try await perform(HTTPRequest(method: "GET", target: target), authRetry: true))
     }
 
-    private func write(_ target: String, body: [String: Any], attempt: String?, timeout: TimeInterval? = nil) async throws -> HTTPResponse {
+    private func write(_ target: String, body: [String: Any], attempt: String?, timeout: TimeInterval? = nil,
+                       maxResponseBodyBytes: Int = HTTPResponseParser.defaultMaxBody) async throws -> HTTPResponse {
         let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         var headers = [("Content-Type", "application/json")]
         if let attempt { headers.append(("X-Loom-Attempt", attempt)) }
-        let request = HTTPRequest(method: "POST", target: target, headers: headers, body: data)
+        let request = HTTPRequest(method: "POST", target: target, headers: headers, body: data, maxResponseBodyBytes: maxResponseBodyBytes)
         return try await perform(request, authRetry: false, timeout: timeout)
     }
 
@@ -591,6 +648,16 @@ public actor ArgoConnection {
 
     private static var chatUpgradeRequired: ArgoClientError {
         .unsupportedServer(.message("Update Argo on the host to read bounded 1 MiB chat pages."))
+    }
+
+    private struct QueuePreviewHeader: Decodable { let bounded: Bool; let byteLimit: Int }
+    private func validateQueuePreview(_ response: HTTPResponse, write: Bool) throws {
+        let header = try? JSONDecoder().decode(QueuePreviewHeader.self, from: response.body)
+        guard response.body.count < ArgoQueue.previewByteLimit,
+              header?.bounded == true, header?.byteLimit == ArgoQueue.previewByteLimit else {
+            let reason = ArgoClientError.Reason.message("The host did not return a bounded queue preview. Refresh the conversation and check the Argo host version.")
+            throw write ? ArgoClientError.deliveryUnknown(reason) : ArgoClientError.invalidResponse(reason)
+        }
     }
 
     private func receipt<T: Decodable>(_ response: HTTPResponse) throws -> T {

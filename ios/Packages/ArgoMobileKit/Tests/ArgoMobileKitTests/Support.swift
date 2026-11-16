@@ -39,6 +39,12 @@ final class FakeTransport: ArgoHTTPTransport, @unchecked Sendable {
 }
 
 extension HTTPResponse {
+    static func queuePreview(_ status: Int, _ body: String, headers: [(name: String, value: String)] = []) -> HTTPResponse {
+        var object = try! JSONSerialization.jsonObject(with: Data(body.utf8)) as! [String: Any]
+        object["bounded"] = true; object["byteLimit"] = 8_388_608
+        return HTTPResponse(status: status, headers: [("Content-Type", "application/json")] + headers,
+                            body: try! JSONSerialization.data(withJSONObject: object), reusable: true)
+    }
     static func json(_ status: Int, _ body: String, headers: [(name: String, value: String)] = []) -> HTTPResponse {
         HTTPResponse(status: status, headers: [("Content-Type", "application/json")] + headers, body: Data(body.utf8), reusable: true)
     }
@@ -102,6 +108,6 @@ enum Fixture {
 
     static let answer = ###"{"prompt":{"nativeId":"u3","at":"2026-11-15T10:00:00Z","text":"修一下"},"process":[{"type":"steps","at":"2026-11-15T10:00:01Z","steps":[{"Time":"2026-11-15T10:00:01Z","Role":"step","Text":"Read a.go","NativeID":"x"}]}],"text":"## 好了","final":true,"turn":3,"turns":3}"###
 
-    static let delivered = #"{"delivered":true,"queue":{"run":"20261115-101010-abcdef01","hold":"","items":[],"later":[]}}"#
-    static let queued = #"{"delivered":false,"item":{"id":"m1","text":"继续","submit":true,"source":"ios","created":"2026-11-15T10:12:00Z"},"queue":{"run":"20261115-101010-abcdef01","state":"working","hold":"Agent 正在工作","items":[{"id":"m1","text":"继续","submit":true,"source":"ios","created":"2026-11-15T10:12:00Z"}],"later":[]}}"#
+    static let delivered = #"{"bounded":true,"byteLimit":8388608,"delivered":true,"queue":{"run":"20261115-101010-abcdef01","hold":"","items":[],"later":[]}}"#
+    static let queued = #"{"bounded":true,"byteLimit":8388608,"delivered":false,"item":{"id":"m1","text":"继续","submit":true,"source":"ios","created":"2026-11-15T10:12:00Z"},"queue":{"run":"20261115-101010-abcdef01","state":"working","hold":"Agent 正在工作","items":[{"id":"m1","text":"继续","submit":true,"source":"ios","created":"2026-11-15T10:12:00Z"}],"later":[]}}"#
 }

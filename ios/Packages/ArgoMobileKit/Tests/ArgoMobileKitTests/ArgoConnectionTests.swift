@@ -205,7 +205,7 @@ final class ArgoConnectionTests: XCTestCase {
         XCTAssertFalse(sent.reuse, "writes always get a fresh stream")
         XCTAssertNil(sent.timeout, "ordinary sends keep the transport default")
         XCTAssertEqual(sent.request.method, "POST")
-        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue")
+        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue?bounded=1")
         XCTAssertEqual(sent.request.header("X-Loom-Attempt"), "ios-attempt-0001")
         XCTAssertEqual(sent.request.header("Content-Type"), "application/json")
         let body = sent.request.json
@@ -220,8 +220,81 @@ final class ArgoConnectionTests: XCTestCase {
         XCTAssertEqual(target["pid"] as? Int, 0)
         XCTAssertFalse(receipt.delivered)
         XCTAssertEqual(receipt.queued?.id, "m1")
+        XCTAssertEqual(receipt.queued?.deliveryUnknown, "")
         XCTAssertEqual(receipt.queue.hold, "Agent 正在工作")
         XCTAssertFalse(receipt.duplicate)
+    }
+
+    func testUnknownQueueItemSurvivesReceiptAndRefresh() async throws {
+        // backend 221c1a94: HTTP 200, no note; item carries the uncertain outcome.
+        let item = #"{"id":"m1","text":"继续","source":"ios","deliveryUnknown":"native acknowledgement lost"}"#
+        let queue = "{\"run\":\"\(run)\",\"state\":\"working\",\"hold\":\"投递结果未知\",\"items\":[\(item)]}"
+        let t = FakeTransport { request in
+            .queuePreview(200, request.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue)
+        }
+        let c = connection(t)
+        let receipt = try await c.send(ArgoOutgoingMessage(run: run, text: "继续", target: nil))
+        XCTAssertFalse(receipt.delivered)
+        XCTAssertFalse(receipt.pasted)
+        XCTAssertEqual(receipt.note, "")
+        XCTAssertEqual(receipt.queued?.deliveryUnknown, "native acknowledgement lost")
+        let fresh = try await c.queue(run: run)
+        XCTAssertEqual(fresh.items, receipt.queue.items)
+        XCTAssertEqual(fresh.items.first, receipt.queued)
+        XCTAssertEqual(t.requests.map(\.request.method), ["POST", "GET"])
+    }
+
+    func testNativeHandoffWireKeepsOriginalIdentityAndSeparateCounts() async throws {
+        for state in ["accepted", "unknown", "future-state"] {
+            let item = "{\"id\":\"native-1\",\"text\":\"original input\",\"target\":{\"run\":\"\(run)\",\"engine\":\"codex\",\"session\":\"original-thread\"},\"native\":{\"state\":\"\(state)\",\"note\":\"original note\"}}"
+            let queue = "{\"run\":\"\(run)\",\"items\":[\(item)],\"pending\":0,\"nativeHistory\":1}"
+            let t = FakeTransport { req in .queuePreview(200, req.method == "POST" ? "{\"delivered\":false,\"item\":\(item),\"queue\":\(queue)}" : queue) }
+            let c = connection(t)
+            let receipt = try await c.send(ArgoOutgoingMessage(run: run, text: "original input", target: ArgoAgentIdentity(run: run, engine: "codex", session: "original-thread")))
+            XCTAssertFalse(receipt.delivered)
+            XCTAssertEqual(receipt.queued?.native?.state, state == "accepted" ? .accepted : .unknown)
+            XCTAssertEqual(receipt.queued?.native?.note, "original note")
+            XCTAssertEqual(receipt.queued?.target?.session, "original-thread")
+            XCTAssertEqual(receipt.queue.pending, 0)
+            XCTAssertEqual(receipt.queue.nativeHistory, 1)
+            let fresh = try await c.queue(run: run)
+            XCTAssertEqual(fresh.items.first, receipt.queued)
+            XCTAssertEqual(t.requests.count, 2)
+        }
+        let card = try JSONDecoder().decode(ArgoAgentCard.self, from: Data(#"{"run":"r1","queued":0,"nativeHistory":2}"#.utf8))
+        XCTAssertEqual(card.queued, 0)
+        XCTAssertEqual(card.nativeHistory, 2)
+    }
+
+    func testNativeHideUsesOnlyDedicatedDeleteWithoutReplay() async throws {
+        let t = FakeTransport { _ in .json(204, "") }
+        let c = connection(t)
+        try await c.hideNativeHandoff(run: run, itemID: "native/a b")
+        let sent = try XCTUnwrap(t.requests.first)
+        XCTAssertEqual(sent.request.method, "DELETE")
+        XCTAssertEqual(sent.request.target, "/api/agents/\(run)/queue/native%2Fa%20b/native?bounded=1")
+        XCTAssertNil(sent.request.body)
+        XCTAssertNil(sent.request.header("X-Loom-Attempt"))
+        XCTAssertFalse(sent.reuse)
+        await assertRefused { try await c.hideNativeHandoff(run: self.run, itemID: "") }
+        await assertRefused { try await c.hideNativeHandoff(run: "unmanaged:t1", itemID: "id") }
+        XCTAssertEqual(t.requests.count, 1)
+        let denied = FakeTransport { _ in .json(401, "{}") }
+        do {
+            try await connection(denied).hideNativeHandoff(run: run, itemID: "id")
+            XCTFail("expected auth error")
+        } catch {}
+        XCTAssertEqual(denied.requests.count, 1)
+    }
+
+    func testDuplicateUnknownReceiptRemainsUnknown() async throws {
+        let result = #"{"delivered":false,"item":{"id":"m1","deliveryUnknown":"lost acknowledgement"},"queue":{"items":[]}}"#
+        let t = FakeTransport { _ in .queuePreview(200, result, headers: [("X-Loom-Duplicate", "1")]) }
+        let receipt = try await connection(t).send(ArgoOutgoingMessage(run: run, text: "x", target: nil, attempt: "ios-again-001"))
+        XCTAssertFalse(receipt.delivered)
+        XCTAssertTrue(receipt.duplicate)
+        XCTAssertEqual(receipt.queued?.deliveryUnknown, "lost acknowledgement")
+        XCTAssertEqual(t.requests.count, 1)
     }
 
     func testSendReportsDuplicateReplay() async throws {
@@ -264,7 +337,7 @@ final class ArgoConnectionTests: XCTestCase {
     func testHTTPErrorsCarryLoomdMessageAndCode() async {
         let t = FakeTransport { _ in .json(409, #"{"error":"Agent 的终端已退出，没有写入","detail":"exit 1","code":"terminal_exited"}"#) }
         do {
-            _ = try await connection(t).send(ArgoOutgoingMessage(run: run, text: "x", target: nil))
+            _ = try await connection(t).queue(run: run)
             XCTFail("expected 409")
         } catch let error as ArgoClientError {
             XCTAssertEqual(error, .http(status: 409, message: "Agent 的终端已退出，没有写入\nexit 1", code: "terminal_exited"))

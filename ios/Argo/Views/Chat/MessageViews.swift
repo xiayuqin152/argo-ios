@@ -114,6 +114,7 @@ struct ThinkingRow: View {
 /// Unknown delivery exposes refresh and copy, without an automatic resend path.
 struct PendingBubble: View {
     let message: PendingDelivery
+    let currentIdentity: ArgoAgentIdentity?
     let retry: () -> Void
     let refresh: () -> Void
     let preview: (ArgoLocalAttachment) -> Void
@@ -130,12 +131,19 @@ struct PendingBubble: View {
                     Text(verbatim: problem).font(Theme.Font.caption).foregroundStyle(.secondary)
                         .readingContent()
                 }
+                if !message.receiptTruncatedFields.isEmpty || !message.receiptItemTruncatedFields.isEmpty {
+                    Text("Queue details are a shortened preview.").font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
+                if case .native(let native) = message.status, case .message(let original) = message.operation {
+                    NativeHandoffDetails(native: native, target: original.target, currentIdentity: currentIdentity)
+                }
                 if message.duplicate {
                     Text("Acknowledged earlier attempt").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 HStack(spacing: Theme.Space.l) {
                     if message.status.canRetry { Button("Retry Sending", action: retry).tapTargetHeight() }
                     if case .unknown = message.status { Button("Refresh Conversation", action: refresh).tapTargetHeight() }
+                    if case .native = message.status { Button("Refresh Conversation", action: refresh).tapTargetHeight() }
                     CopyMessageButton(text: message.operation.text).tapTargetHeight()
                 }
                 .font(Theme.Font.captionStrong)
@@ -161,6 +169,7 @@ struct PendingBubble: View {
         case .delivered: "Delivered to Agent"
         case .answered: "Answer Sent to Terminal"
         case .queued: "Queued on Host"
+        case .native(let native): native.state == .accepted ? "Codex Received" : "Native Receipt Unknown"
         case .pasted: "Pasted in Terminal — Submit There"
         case .notSent: "Not Sent"
         case .unknown: "Delivery Unknown — Refresh First"
@@ -180,6 +189,7 @@ struct PendingBubble: View {
         switch message.status {
         case .delivered, .answered: "checkmark"
         case .queued: Theme.Icon.time
+        case .native(let native): native.state == .accepted ? "tray" : Theme.Icon.warning
         case .pasted: "keyboard"
         case .notSent, .rejected, .unknown: Theme.Icon.warning
         case .sending: Theme.Icon.time
@@ -189,7 +199,39 @@ struct PendingBubble: View {
         switch message.status {
         case .notSent, .rejected: Theme.danger
         case .unknown, .pasted: Theme.cautionText
+        case .native(let native): native.state == .unknown ? Theme.cautionText : .secondary
         default: .secondary
+        }
+    }
+}
+
+/// Status evidence stays separate from native user-message projection.
+struct NativeHandoffDetails: View {
+    let native: ArgoNativeHandoff
+    let target: ArgoAgentIdentity?
+    let currentIdentity: ArgoAgentIdentity?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(verbatim: L10n.text(native.state == .accepted
+                 ? "Codex has received this input. This does not confirm model completion."
+                 : "Reception is unknown. Check the original conversation. Do not send this input again."))
+                .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+            if !native.note.isEmpty {
+                Text(verbatim: native.note).font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+            }
+            Text("Original Conversation").font(Theme.Font.captionStrong)
+            if let target {
+                Text(verbatim: [target.engine, target.run ?? "", target.session].joined(separator: "\n"))
+                    .font(Theme.Font.caption).readingContent().textSelection(.enabled)
+                if let currentIdentity, target != currentIdentity {
+                    Text("This record belongs to a different native conversation.")
+                        .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+                }
+            } else {
+                Text("The original conversation identity is unavailable.")
+                    .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+            }
         }
     }
 }

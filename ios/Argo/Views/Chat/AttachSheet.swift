@@ -147,7 +147,7 @@ struct AttachSheet: View {
             } else {
                 HStack(alignment: .bottom, spacing: Theme.Space.xs) {
                     TextField("Add a caption…", text: $caption, axis: .vertical)
-                        .lineLimit(1...4).font(Theme.Font.body).focused($captionFocused)
+                        .lineLimit(1...4).font(Theme.Font.body).readingContent().focused($captionFocused)
                         .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.s)
                         .frame(minHeight: Theme.Size.tapTarget).modifier(ComposerSurface())
                         .accessibilityIdentifier("attach-caption")
