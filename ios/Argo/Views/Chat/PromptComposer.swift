@@ -10,6 +10,7 @@ import SwiftUI
 struct PromptComposer: View {
     let placeholder: String
     @Bindable var input: ComposerInputOwner
+    let renewInputOwner: () -> Void
     let canSend: Bool
     let sending: Bool
     let showsStop: Bool
@@ -42,11 +43,7 @@ struct PromptComposer: View {
             PasteImageChip(focused: focused && input.acceptsInput, enabled: canAttach, paste: paste)
             box
         }
-        .sheet(isPresented: pagePresentation.binding(in: model, conversation: input.state.key), onDismiss: {
-            pagePresentation.didDismiss(in: model)
-            if !sentFromPage && input.acceptsInput { focused = true }
-            sentFromPage = false
-        }) {
+        .sheet(isPresented: pagePresentation.binding(in: model, conversation: input.state.key), onDismiss: pageDismissed) {
             ComposerPageEditor(placeholder: placeholder, input: input, selection: $selection,
                                canSend: canSend, sending: sending, showsStop: showsStop,
                                canStop: canStop, stopping: stopping, hasAttachments: hasAttachments,
@@ -60,8 +57,8 @@ struct PromptComposer: View {
                 .presentationSizing(.page)
                 .presentationDetents([.large])
         }
-        .onChange(of: input.valid) { _, valid in
-            if !valid { pagePresentation.requestDismissal() }
+        .onChange(of: input.canCommit) { _, current in
+            if !current { inputRevoked() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background && pagePresentation.owner == nil {
@@ -162,6 +159,22 @@ struct PromptComposer: View {
         .onTapGesture { if pagePresentation.owner == nil && input.acceptsInput { focused = true } }
         .animation(reduceMotion ? nil : Theme.Motion.state, value: expanded)
         .animation(reduceMotion ? nil : Theme.Motion.composerGrow, value: text)
+    }
+
+    private func inputRevoked() {
+        input.invalidate()
+        focused = false
+        pagePresentation.requestDismissal()
+        // Keep this owner until the sheet actually closes; its callbacks stay
+        // revoked, and the replacement shell starts without keyboard focus.
+        if pagePresentation.owner == nil { renewInputOwner() }
+    }
+
+    private func pageDismissed() {
+        pagePresentation.didDismiss(in: model)
+        if !sentFromPage && input.acceptsInput { focused = true }
+        sentFromPage = false
+        if !input.canCommit { renewInputOwner() }
     }
 
     private func enlarge() {

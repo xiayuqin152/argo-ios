@@ -1,6 +1,8 @@
 import ArgoMobileKit
 import Foundation
 import Glibc
+import Observation
+import Synchronization
 
 private struct CheckFailure: Error, CustomStringConvertible {
     let description: String
@@ -11,6 +13,7 @@ private enum Outcome: String, CaseIterable, Sendable {
     case delivered, queued, held, notSent, rejected, serverUnknown, lostReceipt, cancelledAfterWrite, malformed, lateResult
     case unboundUnknownRemoved, nativeUnknown, ptyUnknown, queuedThenUnknown, unrelatedUnknown, lateUnknown, backgroundUnknown, staleQueuedReceipt
     case replySent, replyRejected, replyUnknown, replyWrongID, replyNotSent
+    case composerNativeSwitch
     var isReply: Bool { rawValue.hasPrefix("reply") }
 }
 
@@ -21,6 +24,7 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     let text = "SYNTHETIC_PHONE_VISIBILITY_20261116\n  保留原文🙂  "
     private(set) var requests: [HTTPRequest] = []
     private var native: [String] = []
+    private var nativeSession = "native-r1"
     private var pending = false
     private var evidenceGeneration = 0
     private var unknown = false
@@ -37,6 +41,7 @@ private actor DeliveryTransport: ArgoHTTPTransport {
         if let lateResponse { late?.resume(returning: lateResponse) }
         late = nil; lateResponse = nil
     }
+    func switchNative(to session: String) { nativeSession = session }
     func removeQueueRecord() { pending = false }
     func replaceUnknownBatch(_ generation: Int) { evidenceGeneration = generation; pending = true; unknown = true }
     func markQueueUnknown() { unknown = true; if native.isEmpty { native.append(text) } }
@@ -83,7 +88,7 @@ private actor DeliveryTransport: ArgoHTTPTransport {
                 guard body["terminal"] as? String == "t1", body["questionID"] as? String == "q1", body["agent"] as? String == "" else { throw CheckFailure("Wrong reply destination") }
             } else {
                 guard let target = body["target"] as? [String: Any], target["run"] as? String == "r1",
-                      target["engine"] as? String == "codex", target["session"] as? String == "native-r1",
+                      target["engine"] as? String == "codex", target["session"] as? String == nativeSession,
                       body["source"] as? String == "ios", body["submit"] as? Bool == true,
                       body["when"] as? String == "auto" else { throw CheckFailure("Message target or queue contract changed") }
             }
@@ -146,7 +151,7 @@ private actor DeliveryTransport: ArgoHTTPTransport {
                 ["id": "fixture-native-\(index)", "offset": index * 100, "cursor": "\(index * 100):0", "type": "message", "role": "user", "text": text] as [String: Any]
             }
             return try json(["bounded": true, "byteLimit": 1_048_576,
-                             "identity": ["run": run, "engine": "codex", "session": "native-\(run)"],
+                             "identity": ["run": run, "engine": "codex", "session": run == "r1" ? nativeSession : "native-\(run)"],
                              "items": items, "start": after, "end": "\(texts.count * 100):0", "size": texts.count * 100,
                              "older": false, "newer": false])
         }
@@ -194,6 +199,10 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     try await eventually("Initial native identity/team") { model.conversation?.canSendToIdentity == true && model.conversation?.team != nil }
     let state = model.conversation!
     let text = transport.text
+    if outcome == .composerNativeSwitch {
+        try await checkComposerNativeOwner(model: model, state: state, transport: transport)
+        return
+    }
     let ask = state.team?.asks.first
     if let ask { state.replyDrafts[ask.uiID] = text; model.reply(to: ask) }
     else { state.draft = text; model.sendDraft(for: key) }
@@ -369,14 +378,174 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     print("PASS \(outcome.rawValue): original text, target, native-count=\(expected), writes=\(await transport.requests.count)")
 }
 
+
+@MainActor private func checkComposerNativeOwner(model: AppModel, state: ConversationState, transport: DeliveryTransport) async throws {
+    let key = state.key
+    let original = transport.text
+    state.draft = original
+    let chat = ComposerChatProbe(state: state, model: model)
+    chat.renewInputOwner()
+    guard let old = chat.inputOwner else { throw CheckFailure("Missing initial composer owner") }
+    let page = ComposerPageProbe(input: old, send: chat.sendAction(for: old))
+    page.selection = NSRange(location: 4, length: 2)
+    page.appear()
+    page.finish()
+    guard page.cursor == NSRange(location: 4, length: 2), page.selection == page.cursor, state.draft == original else {
+        throw CheckFailure("Normal page completion changed draft/selection")
+    }
+    let prompt = ComposerPromptProbe(input: old, model: model, renew: { chat.renewInputOwner() })
+    prompt.pagePresentation.setPresented(true, in: model, conversation: key)
+    let cover = prompt.pagePresentation.owner
+    let changeObserved = Mutex(false)
+    withObservationTracking { _ = old.canCommit } onChange: { changeObserved.withLock { $0 = true } }
+    TypedText.shown = original
+    defer { TypedText.shown = nil }
+    await transport.switchNative(to: "native-r1-next")
+    model.showLatest()
+    try await eventually("Native N2 applied") { state.transcript.identity?.session == "native-r1-next" && !state.loadingOlder }
+    guard model.selectedKey == key, model.conversation === state,
+          state.sessionNotice?.contains("Your draft is kept") == true, state.draft == original else {
+        throw CheckFailure("Native transition did not retain state/key/draft/notice")
+    }
+    page.sendOnce()
+    try await Task.sleep(for: .milliseconds(40))
+    let writes = await transport.requests
+    if !writes.isEmpty {
+        let body = try JSONSerialization.jsonObject(with: writes[0].body!) as! [String: Any]
+        let target = body["target"] as! [String: Any]
+        print("OBSERVED COMPOSER_NATIVE_RETARGET: same-key=true same-state=true target=\(target["session"]!) original-text=\(body["text"] as? String == original) writes=\(writes.count) draft-consumed=\(state.draft.isEmpty)")
+        throw CheckFailure("COMPOSER_NATIVE_RETARGET: N1 page sent its retained draft to N2")
+    }
+
+    guard !old.canCommit, !old.acceptsInput, state.draft == original, !page.submission.claimed,
+          changeObserved.withLock({ $0 }) else {
+        throw CheckFailure("Old owner accepted native target change or failed observation tracking")
+    }
+    old.text = "late native edit"
+    old.commit("late IME commit")
+    chat.sendAction(for: old)()
+    let field = ComposerTextInput(original)
+    field.selection = NSRange(location: 4, length: 2)
+    field.acceptsInput = { old.acceptsInput }
+    field.send = chat.sendAction(for: old)
+    let coordinator = Coordinator(field)
+    let native = ComposerTextView()
+    native.text = "stale first responder"
+    native.selectedRange = NSRange(location: 0, length: 0)
+    native.acceptsInput = { old.acceptsInput }
+    native.sendsOnReturn = true
+    native.submit = { coordinator.submit($0) }
+    coordinator.textViewDidChange(native)
+    coordinator.textViewDidChangeSelection(native)
+    coordinator.submit(native)
+    native.insertText("\n")
+    _ = native.textPasteConfigurationSupporting(native, performPasteOf: NSAttributedString(string: "\n"),
+                                                to: UITextRange(0, 0))
+    native.wantsFocus = true
+    native.updateFocus()
+    guard state.draft == original, field.text == original, field.selection == NSRange(location: 4, length: 2),
+          !native.isFirstResponder, await transport.requests.isEmpty else {
+        throw CheckFailure("Stale owner/native responder edited, changed selection or submitted")
+    }
+    page.inputChanged(old.canCommit)
+    prompt.inputRevoked()
+    guard !old.valid, !page.focused, !prompt.focused, !prompt.pagePresentation.isPresented,
+          prompt.pagePresentation.owner == cover, chat.inputOwner === old else {
+        throw CheckFailure("Revocation did not close the page before renewal")
+    }
+    page.disappear()
+    guard state.draft == original else { throw CheckFailure("Old page disappearance restored stale text") }
+    prompt.pageDismissed()
+    guard prompt.pagePresentation.owner == nil, !prompt.focused,
+          let replacement = chat.inputOwner, replacement !== old, replacement.acceptsInput,
+          state.sessionNotice?.contains("review the new conversation") == true else {
+        throw CheckFailure("Real sheet dismissal did not release coverage and renew the current native owner")
+    }
+    // A revoked owner remains revoked even if its original identity returns.
+    await transport.switchNative(to: "native-r1")
+    model.showLatest()
+    try await eventually("Original identity returned") { state.transcript.identity?.session == "native-r1" && !state.loadingOlder }
+    old.commit("revived old callback")
+    page.sendOnce()
+    guard !old.canCommit, !replacement.canCommit, state.draft == original, await transport.requests.isEmpty else {
+        throw CheckFailure("Old owner revived on native identity return")
+    }
+    let currentPrompt = ComposerPromptProbe(input: replacement, model: model, renew: { chat.renewInputOwner() })
+    currentPrompt.inputRevoked()
+    guard let current = chat.inputOwner, current !== replacement, current.acceptsInput else {
+        throw CheckFailure("Shell-only native change did not renew its owner")
+    }
+    // Existing cancellation behavior: an unchanged destination restores focus
+    // and preserves the selected UTF-16 range, without renewing its owner.
+    let cancelled = ComposerPromptProbe(input: current, model: model, renew: { chat.renewInputOwner() })
+    cancelled.focused = false
+    cancelled.pagePresentation.setPresented(true, in: model, conversation: key)
+    cancelled.pagePresentation.requestDismissal()
+    cancelled.pageDismissed()
+    guard cancelled.focused, chat.inputOwner === current, state.draft == original else {
+        throw CheckFailure("Ordinary page cancellation changed owner/draft/focus")
+    }
+    // Background only rejects new input; the original lifecycle commit remains
+    // available until the existing explicit invalidation runs.
+    model.setActive(false)
+    current.text = "inactive edit"
+    current.commit(original)
+    chat.renewInputOwner()
+    guard !current.acceptsInput, current.canCommit, chat.inputOwner === current, state.draft == original else {
+        throw CheckFailure("Background changed owner or discarded the lifecycle draft")
+    }
+    model.setActive(true)
+    try await eventually("Foreground") { model.status.isConnected && current.acceptsInput }
+    let nextKey = SessionKey(host: key.host, workspace: key.workspace, run: "r2", terminal: "t2")
+    model.selectSession(nextKey)
+    model.showConversation(nextKey, visible: true)
+    try await eventually("Adjacent conversation") { model.conversation?.canSendToIdentity == true }
+    current.text = "wrong key edit"
+    current.commit("wrong key IME")
+    chat.sendAction(for: current)()
+    chat.renewInputOwner()
+    guard !current.canCommit, chat.inputOwner === current, state.draft == original,
+          model.conversation?.draft.isEmpty == true, await transport.requests.isEmpty else {
+        throw CheckFailure("Old ChatView renewed or submitted across a key switch")
+    }
+    cancelled.inputRevoked()
+    await transport.switchNative(to: "native-r1-next")
+    model.selectSession(key)
+    model.showConversation(key, visible: true)
+    model.showLatest()
+    try await eventually("Original key at N2 restored") {
+        model.conversation === state && state.transcript.identity?.session == "native-r1-next" && !state.loadingOlder
+    }
+    chat.renewInputOwner()
+    guard let fresh = chat.inputOwner, fresh !== current, fresh.acceptsInput, !current.valid else {
+        throw CheckFailure("Returning to a key reused its revoked owner")
+    }
+    let newPage = ComposerPageProbe(input: fresh, send: chat.sendAction(for: fresh))
+    newPage.sendOnce()
+    newPage.sendOnce()
+    try await eventually("New owner delivered once") { await transport.requests.count == 1 && !state.isSending }
+    newPage.disappear()
+    let sent = await transport.requests
+    let body = try JSONSerialization.jsonObject(with: sent[0].body!) as! [String: Any]
+    let target = body["target"] as! [String: Any]
+    guard state.draft.isEmpty, newPage.submission.claimed, await transport.nativeCount == 1,
+          target["session"] as? String == "native-r1-next", body["text"] as? String == original,
+          !replacement.canCommit, !current.canCommit, !old.canCommit else {
+        throw CheckFailure("New-owner single-send or old-page draft preservation changed")
+    }
+    print("PASS composerNativeSwitch: same-key/state native change observed; old page/IME/native responder/selection/paste writes=0; close-before-renew and notice retained; ordinary cancel/background/key switch preserved; fresh N2 owner sends once")
+
+}
+
 @main private struct MobileDeliveryCheck {
     @MainActor static func main() async {
         var failures = 0
-        for outcome in Outcome.allCases {
+        let outcomes: [Outcome] = CommandLine.arguments.contains("--composer-owner-only") ? [.composerNativeSwitch] : Outcome.allCases
+        for outcome in outcomes {
             do { try await check(outcome) }
             catch { failures += 1; print("FAIL \(outcome.rawValue): \(error)") }
         }
-        print("Mobile delivery: \(Outcome.allCases.count - failures)/\(Outcome.allCases.count) passed")
+        print("Mobile delivery: \(outcomes.count - failures)/\(outcomes.count) passed")
         if failures > 0 { exit(1) }
     }
 }

@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 struct ChatView: View {
     @Bindable var state: ConversationState
     @Environment(AppModel.self) private var model
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var following = true
     @State private var progressPresentation = SeenPresentation()
@@ -238,8 +237,8 @@ struct ChatView: View {
         .onChange(of: model.selectedKey) { _, key in
             if key != state.key { inputOwner?.invalidate() }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { renewInputOwner() }
+        .onChange(of: model.acceptsComposerInput) { _, active in
+            if active { renewInputOwner() }
         }
     }
 
@@ -263,7 +262,7 @@ struct ChatView: View {
                 let target = inputOwner.state
                 let identity = target.transcript.identity
                 PromptComposer(placeholder: model.selectedAgent?.state == "working" ? L10n.text("Add a note (queued)") : L10n.text("Message Agent"),
-                           input: inputOwner,
+                           input: inputOwner, renewInputOwner: renewInputOwner,
                            canSend: model.status.isConnected && state.canSendToIdentity && !state.isSending && !state.isInterruptBusy &&
                                (!state.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !state.attachments.isEmpty),
                            sending: state.isMessageSending, showsStop: model.showsInterrupt || state.isInterruptBusy,
@@ -298,11 +297,14 @@ struct ChatView: View {
     }
 
     private func renewInputOwner() {
-        guard inputOwner?.acceptsInput != true else { return }
+        guard model.acceptsComposerInput, model.selectedKey == state.key, model.conversation === state,
+              inputOwner?.acceptsInput != true else { return }
         inputOwner?.invalidate()
         let target = state
+        let identity = target.transcript.identity
         inputOwner = ComposerInputOwner(state: target,
-            destinationIsCurrent: { model.selectedKey == target.key && model.conversation === target },
+            destinationIsCurrent: { model.selectedKey == target.key && model.conversation === target &&
+                target.transcript.identity == identity },
             foreground: { model.acceptsComposerInput })
     }
 

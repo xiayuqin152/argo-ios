@@ -94,6 +94,9 @@ struct ComposerPageEditor: View {
             cursor = selection ?? NSRange(location: (input.text as NSString).length, length: 0)
             focused = input.acceptsInput
         }
+        .onChange(of: input.canCommit) { _, current in
+            if !current { focused = false }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 commitTyped()
