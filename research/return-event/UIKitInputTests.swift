@@ -129,18 +129,33 @@ import XCTest
     }
 
     func testBridgeUsesReadingFontAndSixLineLimit() throws {
+        let appeared = expectation(description: "ComposerTextInput appeared in its window")
         let input = ComposerTextInput(text: .constant("甲\n乙\n丙\n丁\n戊\n己\n庚"),
                                       selection: .constant(nil), focused: .constant(false),
                                       maximumLines: 6, canSend: true, acceptsInput: { true }, send: {})
             .environment(\.dynamicTypeSize, .accessibility5)
+            .onAppear { appeared.fulfill() }
         let controller = UIHostingController(rootView: input)
-        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
+        window.rootViewController = controller
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+        window.makeKeyAndVisible()
+        wait(for: [appeared], timeout: 5)
+        window.layoutIfNeeded()
         controller.view.layoutIfNeeded()
         func find(_ view: UIView) -> ComposerTextView? {
             if let text = view as? ComposerTextView { return text }
             return view.subviews.lazy.compactMap { find($0) }.first
         }
         let view = try XCTUnwrap(find(controller.view))
+        XCTAssertTrue(view.window === window)
         let expected = UIFont.preferredFont(forTextStyle: .body,
                                            compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge))
         XCTAssertEqual(view.font?.pointSize, expected.pointSize)
