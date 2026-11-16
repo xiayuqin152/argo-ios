@@ -431,12 +431,19 @@ struct ChatView: View {
             .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
         }
-        if !state.nativeHistorySources.isEmpty {
+        if !state.nativeHistorySources.isEmpty || model.sourceHistoryProblem != nil {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                Label("Handoffs Before Resume", systemImage: "clock.arrow.circlepath")
+                Label("Records Before Resume", systemImage: "clock.arrow.circlepath")
                     .font(Theme.Font.captionStrong)
                 Text("Read-only records from the original conversation. These are not pending messages or confirmation of model completion.")
                     .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                if let problem = model.sourceHistoryProblem {
+                    NoticeBanner(text: L10n.text("Some earlier records could not be loaded. Current messages and receipts remain available.") + "\n" + problem,
+                                 tone: .caution, lineLimit: nil) {
+                        Button("Refresh Records") { model.refreshConversation() }
+                            .disabled(!model.status.isConnected)
+                    }
+                }
                 ForEach(Array(state.nativeHistorySources.enumerated()), id: \.offset) { _, source in
                     Button {
                         guard historyPresentation.owner == nil else { return }
@@ -446,7 +453,7 @@ struct ChatView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                                 Text(verbatim: source.sourceRun).lineLimit(2)
-                                Text("Native records: \(source.nativeHistory)").font(Theme.Font.caption)
+                                Text("Read-only records: \(source.nativeHistory)").font(Theme.Font.caption)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -496,42 +503,54 @@ private struct NativeHistoryView: View {
                     Text(verbatim: [read.key.workspace, read.source.sourceRun, read.source.target.engine,
                                     read.source.target.session].joined(separator: "\n"))
                         .font(Theme.Font.caption).readingContent().textSelection(.enabled)
-                    if read.loading { ProgressView("Loading Original Handoffs…") }
+                    if read.loading { ProgressView("Loading Original Records…") }
                     if let problem = read.problem {
-                        NoticeBanner(text: L10n.text("Original handoff records could not be loaded.") + "\n" + problem,
+                        NoticeBanner(text: L10n.text("Original records could not be loaded.") + "\n" + problem,
                                      tone: .caution, lineLimit: nil)
                     }
                     if let problem = read.hideProblem {
                         NoticeBanner(text: problem, tone: .caution, lineLimit: nil)
+                    }
+                    if let problem = read.queue?.nativeSourcesError, !problem.isEmpty {
+                        NoticeBanner(text: L10n.text("Some earlier records could not be loaded. Current messages and receipts remain available.") + "\n" + problem,
+                                     tone: .caution, lineLimit: nil)
                     }
                     if !read.loading {
                         Button("Refresh Records") { model.refreshNativeHistory(read) }
                             .disabled(!model.status.isConnected || !read.hidingIDs.isEmpty).tapTargetHeight()
                     }
                     ForEach(read.rows) { item in
-                        if let native = item.native {
-                            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                        VStack(alignment: .leading, spacing: Theme.Space.s) {
+                            if let native = item.native {
                                 Label(L10n.text(native.state == .accepted ? "Codex Received" : "Native Receipt Unknown"),
                                       systemImage: native.state == .accepted ? "tray" : Theme.Icon.warning)
                                     .font(Theme.Font.captionStrong)
                                 NativeHandoffDetails(native: native, target: item.target, currentIdentity: read.source.target)
-                                if item.isIncomplete {
-                                    Text("Shortened preview — original content remains on the host.")
-                                        .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
-                                }
-                                Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.disabled)
-                                HStack(spacing: Theme.Space.l) {
-                                    Button("Copy Full Message") { model.openNativeHistoryItem(item, in: read, copy: true) }.tapTargetHeight()
-                                    Button("View Full Message") { model.openNativeHistoryItem(item, in: read) }.tapTargetHeight()
-                                }
-                                .font(Theme.Font.captionStrong).disabled(!model.status.isConnected)
+                            } else {
+                                Label("Delivery Unknown — Refresh First", systemImage: Theme.Icon.warning)
+                                    .font(Theme.Font.captionStrong).foregroundStyle(Theme.cautionText)
+                                Text("The original terminal may have received this input. Review the original conversation before sending it again.")
+                                    .font(Theme.Font.caption).foregroundStyle(.secondary).readingContent()
+                                Text(verbatim: item.deliveryUnknown).font(Theme.Font.caption).readingContent()
+                            }
+                            if item.isIncomplete {
+                                Text("Shortened preview — original content remains on the host.")
+                                    .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+                            }
+                            Text(verbatim: item.text).font(Theme.Font.secondary).readingContent().textSelection(.disabled)
+                            HStack(spacing: Theme.Space.l) {
+                                Button("Copy Full Message") { model.openNativeHistoryItem(item, in: read, copy: true) }.tapTargetHeight()
+                                Button("View Full Message") { model.openNativeHistoryItem(item, in: read) }.tapTargetHeight()
+                            }
+                            .font(Theme.Font.captionStrong).disabled(!model.status.isConnected)
+                            if item.native != nil {
                                 Button("Hide Record") { nativeToHide = item }
                                     .font(Theme.Font.captionStrong).tapTargetHeight()
                                     .disabled(!model.status.isConnected || read.hidingIDs.contains(item.id) || read.hideProblem != nil)
                             }
-                            .padding(Theme.Space.m)
-                            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
                         }
+                        .padding(Theme.Space.m)
+                        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
                     }
                     if !read.loading, read.problem == nil, read.rows.isEmpty {
                         Text("No remaining visible records for this source. Refresh the conversation to update its sources.")
@@ -540,7 +559,7 @@ private struct NativeHistoryView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.Space.m)
             }
-            .navigationTitle("Handoffs Before Resume")
+            .navigationTitle("Records Before Resume")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.closeNativeHistory(read) } } }
         }

@@ -139,7 +139,7 @@ final class NativeHistoryRead: Identifiable {
 
     var rows: [ArgoQueuedMessage] {
         ((queue?.items ?? []) + (queue?.later ?? [])).filter {
-            $0.native != nil && $0.target == source.target && !hiddenIDs.contains($0.id)
+            ($0.native != nil || !$0.deliveryUnknown.isEmpty) && $0.target == source.target && !hiddenIDs.contains($0.id)
         }
     }
 

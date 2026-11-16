@@ -86,6 +86,13 @@ final class AppModel {
     var selectedWorkspace: ArgoWorkspace? { workspaces.first { $0.id == workspaceID } }
     var selectedAgent: ArgoAgentCard? { agents.first { $0.run == selectedKey?.run && $0.terminal == selectedKey?.terminal } }
     var conversation: ConversationState? { selectedKey.flatMap { conversations[$0] } }
+    /// A history lookup warning never replaces a current queue/send result.
+    var sourceHistoryProblem: String? {
+        let detail: String?
+        if let queue = conversation?.queue { detail = queue.nativeSourcesError }
+        else { detail = selectedAgent?.nativeSourcesError }
+        return detail?.isEmpty == false ? detail : nil
+    }
     var acceptsComposerInput: Bool { active }
 
     var showsInterrupt: Bool {
@@ -475,7 +482,7 @@ final class AppModel {
                                      chatIdentity: state.transcript.identity)
         state.nativeHistoryRead = read
         guard nativeHistoryIsCurrent(read) else {
-            read.problem = L10n.text("The original handoff source changed. Refresh the conversation.")
+            read.problem = L10n.text("The original record source changed. Refresh the conversation.")
             return
         }
         refreshNativeHistory(read)
@@ -502,7 +509,7 @@ final class AppModel {
               read.source.target.isValid, read.source.target.run == read.source.sourceRun,
               read.source.target.engine == owner.engine, read.source.target.session == owner.session else {
             read.loading = false
-            read.problem = L10n.text("The original handoff source changed. Refresh the conversation.")
+            read.problem = L10n.text("The original record source changed. Refresh the conversation.")
             return
         }
         let epoch = hostEpoch
@@ -521,12 +528,12 @@ final class AppModel {
                       read.loadID == loadID else { return }
                 guard queue.run == read.source.sourceRun, queue.ws == read.key.workspace,
                       queue.identity == read.source.target else {
-                    throw ArgoClientError.invalidResponse(.message("The original handoff source changed. Refresh the conversation."))
+                    throw ArgoClientError.invalidResponse(.message("The original record source changed. Refresh the conversation."))
                 }
                 read.queue = queue
                 read.hideProblem = nil
                 if read.rows.isEmpty && read.hiddenIDs.isEmpty {
-                    read.problem = L10n.text("No matching original handoff records were returned. Refresh the conversation.")
+                    read.problem = L10n.text("No matching original records were returned. Refresh the conversation.")
                 }
             } catch {
                 guard !Task.isCancelled, isCurrentHost(epoch), self.connection === connection,
@@ -553,7 +560,7 @@ final class AppModel {
 
     func hideNativeHistoryItem(_ item: ArgoQueuedMessage, in read: NativeHistoryRead) {
         guard nativeHistoryIsCurrent(read), status.isConnected, let connection,
-              connection.host.id == read.key.host, read.rows.contains(item), read.hideProblem == nil,
+              connection.host.id == read.key.host, read.rows.contains(item), item.native != nil, read.hideProblem == nil,
               !read.hidingIDs.contains(item.id) else { return }
         read.hidingIDs.insert(item.id)
         let epoch = hostEpoch

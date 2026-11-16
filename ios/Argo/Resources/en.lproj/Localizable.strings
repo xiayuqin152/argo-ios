@@ -401,11 +401,18 @@
 "Copied" = "Copied";
 
 /* Original read-only handoffs after native session resume. */
-"Handoffs Before Resume" = "Handoffs Before Resume";
+"Records Before Resume" = "Records Before Resume";
 "Read-only records from the original conversation. These are not pending messages or confirmation of model completion." = "Read-only records from the original conversation. These are not pending messages or confirmation of model completion.";
-"Loading Original Handoffs…" = "Loading Original Handoffs…";
-"Original handoff records could not be loaded." = "Original handoff records could not be loaded.";
+"Loading Original Records…" = "Loading Original Records…";
+"Original records could not be loaded." = "Original records could not be loaded.";
 "Refresh Records" = "Refresh Records";
-"The original handoff source changed. Refresh the conversation." = "The original handoff source changed. Refresh the conversation.";
-"No matching original handoff records were returned. Refresh the conversation." = "No matching original handoff records were returned. Refresh the conversation.";
+"The original record source changed. Refresh the conversation." = "The original record source changed. Refresh the conversation.";
+"No matching original records were returned. Refresh the conversation." = "No matching original records were returned. Refresh the conversation.";
 "No remaining visible records for this source. Refresh the conversation to update its sources." = "No remaining visible records for this source. Refresh the conversation to update its sources.";
+
+/* Partial source warnings and terminal delivery uncertainty. */
+"Read-only records: %lld" = "Read-only records: %lld";
+"Some earlier records could not be loaded. Current messages and receipts remain available." = "Some earlier records could not be loaded. Current messages and receipts remain available.";
+"The original terminal may have received this input. Review the original conversation before sending it again." = "The original terminal may have received this input. Review the original conversation before sending it again.";
+"Earlier Records Unavailable" = "Earlier Records Unavailable";
+"Open the conversation to review earlier records." = "Open the conversation to review earlier records.";

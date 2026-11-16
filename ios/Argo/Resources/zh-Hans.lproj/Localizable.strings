@@ -401,11 +401,18 @@
 "Copied" = "已复制";
 
 /* Original read-only handoffs after native session resume. */
-"Handoffs Before Resume" = "续接前交接";
+"Records Before Resume" = "续接前记录";
 "Read-only records from the original conversation. These are not pending messages or confirmation of model completion." = "原会话的只读交接记录，不属于当前待发送消息，也不表示模型已处理完成。";
-"Loading Original Handoffs…" = "正在读取原交接记录…";
-"Original handoff records could not be loaded." = "无法读取原交接记录。";
+"Loading Original Records…" = "正在读取原记录…";
+"Original records could not be loaded." = "无法读取原记录。";
 "Refresh Records" = "刷新记录";
-"The original handoff source changed. Refresh the conversation." = "原交接来源已变化，请刷新会话。";
-"No matching original handoff records were returned. Refresh the conversation." = "未返回与原身份匹配的交接记录，请刷新会话。";
+"The original record source changed. Refresh the conversation." = "原记录来源已变化，请刷新会话。";
+"No matching original records were returned. Refresh the conversation." = "未返回与原身份匹配的记录，请刷新会话。";
 "No remaining visible records for this source. Refresh the conversation to update its sources." = "此来源已无剩余可见记录，请刷新会话以更新来源。";
+
+/* Partial source warnings and terminal delivery uncertainty. */
+"Read-only records: %lld" = "只读记录：%lld";
+"Some earlier records could not be loaded. Current messages and receipts remain available." = "部分续接前记录暂时无法读取，当前消息与回执仍可使用。";
+"The original terminal may have received this input. Review the original conversation before sending it again." = "原终端可能已接收此输入，再次发送前请检查原会话。";
+"Earlier Records Unavailable" = "续接前记录暂不可用";
+"Open the conversation to review earlier records." = "打开会话以检查续接前记录。";

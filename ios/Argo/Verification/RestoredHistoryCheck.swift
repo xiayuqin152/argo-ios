@@ -13,6 +13,11 @@ private enum Scenario: String, CaseIterable {
     case fullRevision, fullWorkspace, fullIdentity, fullTarget, fullLater
     case sourceClose, sourceHost, sourceRun, sourceReconnect, sourceRepair, sourceRevoked, sourceRefresh, ownerIdentityChanged
     case fullClose, fullSheetClose, fullHost, fullRun, fullReconnect, hideDuplicate, hideClose, hideUnknown, cleanup
+    case warningZero, warningPartial, warningRecovery, warningCard
+    case ordinaryUnknown, ordinaryFullRevision, ordinaryFullOwner, ordinaryFullClose, ordinaryRepair, ordinaryCleanup
+
+    var ordinarySource: Bool { [.ordinaryUnknown, .ordinaryFullRevision, .ordinaryFullOwner, .ordinaryFullClose, .ordinaryRepair, .ordinaryCleanup].contains(self) }
+    var sourceWarning: Bool { [.warningZero, .warningPartial, .warningRecovery].contains(self) }
 }
 
 // Synthetic external I/O. These fixtures execute the actual ArgoConnection,
@@ -26,6 +31,7 @@ private actor Network {
     private var posted = false
     private var revoked = false
     private var ownerSession = "native-shared"
+    private var warningCleared = false
     private(set) var writes: [(String, String)] = []
     private(set) var sendAttempts: [String] = []
     private(set) var sourceGets = 0
@@ -35,12 +41,18 @@ private actor Network {
     func hold(_ path: String) { holdPath = path }
     func revoke() { revoked = true }
     func changeOwner() { ownerSession = "new-owner-native-session" }
+    func clearWarning() { warningCleared = true }
     func release() { if let held { waiter?.resume(returning: held) }; waiter = nil; held = nil }
     private func identity(_ run: String, session: String = "native-shared") -> [String: Any] {
-        ["run": run, "engine": "codex", "session": session]
+        ["run": run, "engine": scenario.ordinarySource ? "claude" : "codex", "session": session]
     }
     private func sources() -> [[String: Any]] {
         if revoked { return [] }
+        if scenario.ordinarySource { return [["sourceRun": "r0", "target": identity("r0"), "nativeHistory": 1]] }
+        if scenario.sourceWarning && !warningCleared {
+            if scenario != .warningPartial { return [] }
+            return [["sourceRun": "r0", "target": identity("r0"), "nativeHistory": 3]]
+        }
         return [["sourceRun": "r0", "target": identity("r0", session: scenario == .wrongSourceSession ? "other-native" : "native-shared"), "nativeHistory": hidden ? 2 : 3],
                 ["sourceRun": "r-old", "target": identity("r-old"), "nativeHistory": 1]]
     }
@@ -50,7 +62,11 @@ private actor Network {
             "target": identity(run)]
         if let native { row["native"] = ["state": native, "note": "synthetic handoff"] }
         if !full { row["truncatedFields"] = ["text"] }
-        if native == nil && posted { row["deliveryUnknown"] = "synthetic unknown" }
+        if native == nil && posted && ["r1", "r2"].contains(run) { row["deliveryUnknown"] = "synthetic unknown" }
+        if scenario.ordinarySource && run == "r0" && id == "same" {
+            row.removeValue(forKey: "native")
+            row["deliveryUnknown"] = "synthetic PTY input may have arrived"
+        }
         return row
     }
     private func queue(_ run: String) -> [String: Any] {
@@ -69,6 +85,29 @@ private actor Network {
             "later": source && scenario != .noMatchingRows ? [row(run, id: "future", native: "future-host-state")] : [],
             "pending": source ? 1 : (posted && scenario == .receipt ? 0 : 1), "nativeHistory": source ? (hidden ? 3 : 4) : (scenario == .legacy ? 1 : (posted && scenario == .receipt ? 6 : 5) - (hidden ? 1 : 0))]
         if !source && scenario != .legacy { value["nativeSources"] = sources() }
+        if scenario.sourceWarning && !warningCleared {
+            value["nativeSourcesError"] = "synthetic earlier source unavailable"
+            if !source {
+                value["nativeHistory"] = scenario == .warningPartial ? 4 : 0
+                if scenario != .warningPartial { value["items"] = [row(run, native: nil)] }
+                if scenario == .warningZero { value["items"] = []; value["pending"] = 0 }
+            }
+        }
+        if scenario.ordinarySource {
+            if source {
+                var foreign = row(run, native: nil)
+                foreign["deliveryUnknown"] = "synthetic other session unknown"
+                foreign["target"] = identity(run, session: "other-native")
+                foreign["id"] = "foreign"
+                value["items"] = [row(run), row(run, id: "pending", native: nil), row(run, id: "sent", native: nil), foreign]
+                value["later"] = []
+                value["pending"] = 4
+                value["nativeHistory"] = 0
+            } else {
+                value["items"] = [row(run, native: nil)]
+                value["nativeHistory"] = 1
+            }
+        }
         if !source { value["identity"] = identity(run, session: ownerSession) }
         if run == "r-old" {
             value["items"] = [row(run)]
@@ -102,6 +141,7 @@ private actor Network {
             try require(!attempt.isEmpty, "Missing send attempt")
             sendAttempts.append(attempt)
             writes.append((request.method, path)); posted = true
+            if scenario == .warningZero { return try json(["bounded": true, "byteLimit": 8_388_608, "delivered": true, "queue": queue("r1")]) }
             if scenario == .receipt { return try json(["bounded": true, "byteLimit": 8_388_608, "delivered": false, "item": row("r1"), "queue": queue("r1")]) }
             throw TransportFailure.noReply("synthetic unknown after POST")
         }
@@ -116,8 +156,14 @@ private actor Network {
             if path == "/api/health" { return try json(["api": 1, "version": "synthetic"]) }
             if path == "/api/projects" || path == "/api/agents/profiles" { return try json([]) }
             if path == "/api/workspaces" { return try json([["id": "w1"]]) }
-            if path == "/api/agents" { return try json((1...2).map { ["run": "r\($0)", "terminal": "t\($0)", "ws": "w1", "engine": "codex", "status": "active", "state": "working"] }) }
-            if path == "/api/terminals" { return try json((1...2).map { ["id": "t\($0)", "ws": "w1", "alive": true, "agent": ["run": "r\($0)", "engine": "codex"]] as [String: Any] }) }
+            if path == "/api/agents" {
+                return try json((1...2).map { index -> [String: Any] in
+                    var card: [String: Any] = ["run": "r\(index)", "terminal": "t\(index)", "ws": "w1", "engine": scenario.ordinarySource ? "claude" : "codex", "status": "active", "state": "working"]
+                    if scenario == .warningCard { card["nativeSourcesError"] = "synthetic earlier source unavailable"; card["nativeHistory"] = 0 }
+                    return card
+                })
+            }
+            if path == "/api/terminals" { return try json((1...2).map { ["id": "t\($0)", "ws": "w1", "alive": true, "agent": ["run": "r\($0)", "engine": scenario.ordinarySource ? "claude" : "codex"]] as [String: Any] }) }
             if path.hasSuffix("/chat") {
                 let run = path.contains("/t1/") ? "r1" : "r2"
                 if url.queryItems?.contains(where: { $0.name == "after" && $0.value == "1:0" }) == true {
@@ -140,10 +186,10 @@ private actor Network {
                 try require(parts.count == 5 && ["r0", "r-old"].contains(run) && url.queryItems == nil, "Full read used the current run or preview endpoint")
                 let id = String(parts[4])
                 var item = row(run, id: id, native: id == "future" ? "future-host-state" : (id == "unknown" ? "unknown" : "accepted"), full: true)
-                if scenario == .fullRevision { item["updated"] = "2026-11-16T08:00:02Z" }
+                if scenario == .fullRevision || scenario == .ordinaryFullRevision { item["updated"] = "2026-11-16T08:00:02Z" }
                 if scenario == .fullTarget { item["target"] = identity(run, session: "other-native") }
                 response = try json(["run": run, "ws": scenario == .fullWorkspace ? "other-workspace" : "w1",
-                    "identity": identity(scenario == .fullIdentity ? "r-wrong" : run), "state": "stopped", "ended": true,
+                    "identity": identity(scenario == .fullIdentity || scenario == .ordinaryFullOwner ? "r-wrong" : run), "state": "stopped", "ended": true,
                     "later": scenario == .fullLater ? true : id == "future", "item": item])
             }
         }
@@ -227,6 +273,99 @@ private actor Pairing {
 
 @MainActor private func run(_ scenario: Scenario, _ f: Fixture) async throws {
     let state = f.model.conversation!
+    if scenario == .warningCard {
+        try require(f.model.selectedAgent?.nativeHistory == 0 && f.model.selectedAgent?.nativeSourcesError != nil &&
+                    f.model.sourceHistoryProblem == nil, "Fresh queue did not own its warning over stale card data")
+        state.releaseReloadableContent()
+        try require(f.model.sourceHistoryProblem == "synthetic earlier source unavailable" &&
+                    AgentSession(f.model.selectedAgent!).state == .working, "Card-only zero-count warning became a current Agent failure or disappeared")
+        f.model.refreshConversation()
+        try await eventually("Fresh queue clears card fallback") { state.queue != nil && state.canSendToIdentity && f.model.sourceHistoryProblem == nil }
+        return
+    }
+    if scenario.sourceWarning {
+        try require(f.model.sourceHistoryProblem == "synthetic earlier source unavailable" && state.problem == nil &&
+                    f.model.status.isConnected && state.canSendToIdentity, "Source warning invalidated current queue/native owner")
+        if scenario == .warningZero {
+            try require(state.queue?.nativeHistory == 0 && state.nativeHistorySources.isEmpty && state.pendingQueueCount == 0, "Zero-count fixture did not retain the independent warning")
+            for index in 1...2 {
+                state.draft = original
+                f.model.sendDraft(for: state.key)
+                try await eventually("Current send succeeds despite source warning") { state.deliveries.count == index && state.deliveries.allSatisfy { $0.status == .delivered } }
+                try require(f.model.sourceHistoryProblem != nil && state.problem == nil && state.deliveries.last?.operation.text == original,
+                            "Successful current receipt was hidden by a source failure")
+            }
+            let writes = await f.network.writes, attempts = await f.network.sendAttempts
+            try require(writes.count == 2 && Set(attempts).count == 2 && state.deliveries.allSatisfy { $0.queueItemID == nil },
+                        "Source warning blocked a new draft, retried an old attempt or fabricated an item binding")
+        } else if scenario == .warningRecovery {
+            state.draft = "preserve draft while source reads recover"
+            await f.network.clearWarning(); f.model.refreshConversation()
+            try await eventually("Source warning recovers independently") { f.model.sourceHistoryProblem == nil && state.nativeHistorySources.count == 2 }
+            try require(state.draft == "preserve draft while source reads recover" && state.problem == nil, "Source recovery consumed a current draft")
+        } else {
+            let read = try f.open(state)
+            try await eventually("Available partial source remains readable") { !read.loading && read.rows.count == 3 }
+            try require(state.allQueueItems.count == 2 && state.pendingQueueCount == 1 && state.nativeHistoryCount == 1 &&
+                        read.problem == nil && read.queue?.nativeSourcesError != nil, "Partial warning discarded usable current/source rows")
+            f.model.openNativeHistoryItem(read.rows[0], in: read, copy: true)
+            let full = read.queueItemRead!
+            await full.task?.value
+            try require(f.model.queueItemText(full) == original && f.model.sourceHistoryProblem != nil, "Partial warning invalidated a validated full read")
+        }
+        return
+    }
+    if scenario.ordinarySource {
+        if scenario == .ordinaryUnknown || scenario == .ordinaryCleanup {
+            state.draft = original; f.model.sendDraft(for: state.key)
+            try await eventually("Original current attempt unknown") {
+                if case .unknown = state.deliveries.first?.status { return true }; return false
+            }
+        }
+        let read = try f.open(state)
+        try await eventually("Stable Claude source loaded") { !read.loading && read.rows.count == 1 }
+        let row = read.rows[0]
+        try require(row.id == "same" && row.native == nil && !row.deliveryUnknown.isEmpty &&
+                    row.target == read.source.target && row.target?.engine == "claude" && state.nativeHistoryCount == 0,
+                    "Plain unknown was forged into Native or pending/foreign rows leaked into its source")
+        f.model.hideNativeHistoryItem(row, in: read)
+        try require(read.hideTasks.isEmpty && read.hidingIDs.isEmpty, "Plain unknown used native-hide")
+        let delayed = scenario == .ordinaryFullClose || scenario == .ordinaryRepair
+        if delayed { await f.network.hold("/api/agents/r0/queue/same") }
+        f.model.openNativeHistoryItem(row, in: read, copy: true)
+        let full = read.queueItemRead!, task = read.queueItemRead!.task!
+        if delayed {
+            try await eventually("Plain source full GET held") { await f.network.waiting }
+            if scenario == .ordinaryRepair {
+                f.model.pair(code: Fixture.code("a"), name: "synthetic", deviceName: "synthetic")
+                try await eventually("Real ordinary-source same-host re-pair") { !f.model.pairing && f.model.selectedHost?.deviceID != f.a.deviceID && f.model.status.isConnected }
+            } else { f.model.closeNativeHistory(read) }
+            await f.network.release(); await task.value
+            try require(task.isCancelled && full.item == nil && read.queue == nil && f.model.queueItemText(full) == nil, "Late plain source full read crossed its presentation/pairing owner")
+        } else {
+            await task.value
+            if scenario == .ordinaryFullRevision || scenario == .ordinaryFullOwner {
+                try require(full.problem != nil && full.item == nil && f.model.queueItemText(full) == nil, "Changed plain unknown full revision/identity authorized copy")
+            } else {
+                try require(full.item?.native == nil && full.item?.deliveryUnknown == row.deliveryUnknown && full.run == "r0" &&
+                            full.key == state.key && f.model.queueItemText(full) == original, "Plain unknown full read lost original run/target/body/status")
+            }
+        }
+        if scenario == .ordinaryCleanup {
+            state.releaseReloadableContent()
+            try require(state.nativeHistoryRead == nil && read.queue == nil && read.queueItemRead == nil && read.hideTasks.isEmpty,
+                        "Cold state retained plain unknown source content")
+        }
+        let writes = await f.network.writes
+        try require(writes.allSatisfy { $0.0 == "POST" } && writes.count == (scenario == .ordinaryUnknown || scenario == .ordinaryCleanup ? 1 : 0),
+                    "Plain source reading posted, removed or automatically retried input")
+        if !state.deliveries.isEmpty {
+            guard case .unknown = state.deliveries[0].status else { throw Failure("Plain source promoted a current unknown receipt") }
+            try require(!state.deliveries[0].status.canRetry && state.deliveries[0].operation.text == original && state.deliveries[0].queueItemID == nil,
+                        "Plain source rebound the current operation or retry rule")
+        }
+        return
+    }
     if scenario == .legacy {
         try require(state.nativeHistorySources.isEmpty && state.ordinaryQueueItems.count == 1, "Old host lost queue functionality or fabricated sources")
         return

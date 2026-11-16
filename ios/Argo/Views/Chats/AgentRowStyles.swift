@@ -44,12 +44,17 @@ struct SlotRow: View {
                     }
                     if session.card.nativeHistory > 0 {
                         Image(systemName: "tray")
-                        Text("Native records: \(session.card.nativeHistory)")
+                        Text("Read-only records: \(session.card.nativeHistory)")
                     }
                 }
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, Theme.Space.xxs)
+                if let problem = session.card.nativeSourcesError, !problem.isEmpty {
+                    Label("Earlier Records Unavailable", systemImage: Theme.Icon.warning)
+                        .font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
+                        .accessibilityHint("Open the conversation to review earlier records.")
+                }
             }
         }
         .padding(.vertical, Theme.Space.xs)
