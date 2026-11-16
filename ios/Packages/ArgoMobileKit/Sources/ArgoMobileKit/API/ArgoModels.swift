@@ -317,6 +317,9 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
     public let queued: Int
     /// Read-only native handoffs, separate from messages waiting to send.
     public let nativeHistory: Int
+    /// A partial failure reading earlier-run history, separate from current state.
+    /// nil means the host did not provide a source-read error.
+    public let nativeSourcesError: String?
     public let error: String
     public let endReason: String
     public let exitCode: Int?
@@ -335,7 +338,7 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case run, ws, terminal, profile, engine, cli, leader, title, latestTitle, activity, reply, status, state,
              stateText, failKind, failNote, stateStartedAt, interrupted, unread, attention, ask, waitingIDs, plan, tasks, done, queued, error,
-             endReason, exitCode, cwd, created, updated, nativeHistory
+             endReason, exitCode, cwd, created, updated, nativeHistory, nativeSourcesError
     }
 
     public init(from decoder: Decoder) throws {
@@ -367,6 +370,7 @@ public struct ArgoAgentCard: Decodable, Equatable, Identifiable, Sendable {
         done = try c.value(.done, or: 0)
         queued = try c.value(.queued, or: 0)
         nativeHistory = try c.value(.nativeHistory, or: 0)
+        nativeSourcesError = try c.decodeIfPresent(String.self, forKey: .nativeSourcesError)
         error = try c.value(.error, or: "")
         endReason = try c.value(.endReason, or: "")
         exitCode = try c.decodeIfPresent(Int.self, forKey: .exitCode)
@@ -411,6 +415,7 @@ extension ArgoAgentCard {
         done = 0
         queued = 0
         nativeHistory = 0
+        nativeSourcesError = nil
         error = ""
         endReason = ""
         exitCode = nil
@@ -862,13 +867,18 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
     public let truncatedFields: [String]
     /// Ordinary unsent and scheduled messages. Absent on pre-handoff hosts.
     public let pending: Int?
-    /// Total read-only handoffs, including those referenced by nativeSources.
+    /// Read-only handoffs counted by the host, including available nativeSources.
+    /// The count may be incomplete when nativeSourcesError is present.
     public let nativeHistory: Int
     /// Earlier-run references, without their bodies or sendable items.
     /// nil means the host did not provide sources, not that history is absent.
     public let nativeSources: [ArgoNativeHistorySource]?
+    /// Earlier-run sources are incomplete. Available references and the current
+    /// queue/receipt remain valid; this does not replace their own notices.
+    /// nil means no source-read error was provided, not a complete-history guarantee.
+    public let nativeSourcesError: String?
 
-    private enum CodingKeys: String, CodingKey { case run, ws, identity, state, ended, hold, items, later, pending, nativeHistory, nativeSources, truncatedFields }
+    private enum CodingKeys: String, CodingKey { case run, ws, identity, state, ended, hold, items, later, pending, nativeHistory, nativeSources, nativeSourcesError, truncatedFields }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         run = try c.value(.run, or: "")
@@ -883,6 +893,7 @@ public struct ArgoQueue: Decodable, Equatable, Sendable {
         pending = try c.decodeIfPresent(Int.self, forKey: .pending)
         nativeHistory = try c.value(.nativeHistory, or: 0)
         nativeSources = try c.decodeIfPresent([ArgoNativeHistorySource].self, forKey: .nativeSources)
+        nativeSourcesError = try c.decodeIfPresent(String.self, forKey: .nativeSourcesError)
     }
 }
 
