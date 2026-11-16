@@ -3,13 +3,6 @@ import UIKit
 import XCTest
 @testable import ReturnEventHost
 
-// Only public getters supply the synthetic result. The test first requires
-// UIKit to insert its newline before checking the enabled Return-send path.
-@MainActor private final class SyntheticLineBreakPhrase: UIDictationPhrase {
-    override var text: String { "\n" }
-    override var alternativeInterpretations: [String]? { ["\n", "\r\n"] }
-}
-
 /// Hosted iOS tests of the actual UIKit subclass. No network, clipboard or real
 /// messages. Calling the paste delegate checks the final native insertion step;
 /// end-to-end paste menus, item providers and physical IMEs remain device checks.
@@ -171,7 +164,10 @@ import XCTest
         XCTAssertEqual(view.selectedRange, NSRange(location: (view.text as NSString).length, length: 0))
     }
 
-    func testExplicitDictationResultNewlineDoesNotSubmit() throws {
+    // The hosted UITextView does not implement the optional dictation-result
+    // callback. This covers the required public replacement boundary only;
+    // system dictation dispatch remains outside this synthetic input test.
+    func testTextInputReplacementNewlineDoesNotSubmit() throws {
         try withField { view in
             view.sendsOnReturn = true
             var sends = 0
@@ -184,27 +180,19 @@ import XCTest
             sends = 0
 
             let input: any UITextInput = view
-            let insertResult = try XCTUnwrap(
-                input.insertDictationResult,
-                "SETUP: UITextView must implement the public dictation-result callback"
-            )
-            // Validate the payload through native editing before enabling the
-            // send interception. Keep UIKit's actual whitespace as the oracle.
-            view.sendsOnReturn = false
-            view.setDraft("seed")
-            view.selectedRange = NSRange(location: 4, length: 0)
-            insertResult([SyntheticLineBreakPhrase()])
-            let nativeText = try XCTUnwrap(view.text)
-            XCTAssertTrue(nativeText.hasPrefix("seed"), "SETUP: dictation must preserve the existing draft")
-            XCTAssertTrue(nativeText.contains("\n"), "SETUP: UIKit must actually insert the synthetic newline")
-            guard nativeText.hasPrefix("seed"), nativeText.contains("\n") else { return }
+            let caret = try XCTUnwrap(input.selectedTextRange)
+            input.replace(caret, withText: "\n")
+            XCTAssertEqual(view.text, "seed\n", "REPLACEMENT: UIKit must actually insert the newline")
+            XCTAssertEqual(sends, 0, "REPLACEMENT: public text-input insertion must not submit")
 
-            view.sendsOnReturn = true
-            view.setDraft("seed")
-            view.selectedRange = NSRange(location: 4, length: 0)
-            insertResult([SyntheticLineBreakPhrase()])
-            XCTAssertEqual(view.text, nativeText, "DICTATION: the result must remain native text with Return sends enabled")
-            XCTAssertEqual(sends, 0, "DICTATION: an explicit dictation result must not submit")
+            view.setDraft("seedTAIL")
+            let start = try XCTUnwrap(input.position(from: input.beginningOfDocument, offset: 4))
+            let range = try XCTUnwrap(input.textRange(from: start, to: input.endOfDocument))
+            input.selectedTextRange = range
+            XCTAssertEqual(input.text(in: range), "TAIL", "SETUP: the replacement must target actual text")
+            input.replace(range, withText: "\n")
+            XCTAssertEqual(view.text, "seed\n", "REPLACEMENT: UIKit must replace the selected text with a newline")
+            XCTAssertEqual(sends, 0, "REPLACEMENT: public text-input replacement must not submit")
         }
     }
 
