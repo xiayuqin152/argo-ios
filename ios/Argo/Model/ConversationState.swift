@@ -116,7 +116,8 @@ final class ConversationState {
         didSet { reconcileQueueReceipts() }
     }
     var deliveries: [PendingDelivery] = []
-    private var nativeItems: [String: ArgoQueuedMessage] = [:]
+    /// Session-owned evidence may arrive before POST binds its server item ID.
+    private var queueEvidence: [String: ArgoQueuedMessage] = [:]
     private var hiddenNativeIDs: Set<String> = []
     var hidingNativeIDs: Set<String> = []
     var nativeHideProblem: String?
@@ -197,8 +198,17 @@ final class ConversationState {
         loadingOlder = false
         followingLatest = true
         deliveries.removeAll { $0.status.isKnownSuccess }
-        let retainedIDs = Set(deliveries.compactMap(\.queueItemID))
-        nativeItems = nativeItems.filter { retainedIDs.contains($0.key) }
+        let awaitingItemID = deliveries.contains { delivery in
+            guard delivery.queueItemID == nil, case .message = delivery.operation else { return false }
+            switch delivery.status {
+            case .sending, .unknown: return true
+            default: return false
+            }
+        }
+        if !awaitingItemID {
+            let retainedIDs = Set(deliveries.compactMap(\.queueItemID))
+            queueEvidence = queueEvidence.filter { retainedIDs.contains($0.key) }
+        }
     }
 
     func forget() {
@@ -214,7 +224,7 @@ final class ConversationState {
         modelRecoveryProblem = nil
         answeredQuestions.removeAll()
         deliveries.removeAll()
-        nativeItems.removeAll()
+        queueEvidence.removeAll()
         hiddenNativeIDs.removeAll()
         hidingNativeIDs.removeAll()
         nativeHideProblem = nil
@@ -247,7 +257,7 @@ final class ConversationState {
             deliveries.remove(at: index)
             return // A late POST must not restore an explicitly hidden record.
         }
-        if let item = receipt.queued { rememberNative(item) }
+        if let item = receipt.queued { rememberQueueEvidence(item) }
         // GET can identify the handoff before POST reveals this attempt's item ID.
         reconcileQueueReceipts()
         if let item = receipt.queued, let native = nativeRecord(for: item)?.native {
@@ -272,6 +282,7 @@ final class ConversationState {
     /// from a queue or matching transcript text never establishes delivery.
     func deliveryUnknown(for item: ArgoQueuedMessage) -> String? {
         if !item.deliveryUnknown.isEmpty { return item.deliveryUnknown }
+        if let evidence = queueEvidence[item.id], !evidence.deliveryUnknown.isEmpty { return evidence.deliveryUnknown }
         if let delivery = deliveries.first(where: { $0.queueItemID == item.id }),
            case .unknown(let reason) = delivery.status { return reason }
         return nil
@@ -279,28 +290,31 @@ final class ConversationState {
 
     private func reconcileQueueReceipts() {
         guard let queue, queue.run == key.run else { return }
-        for item in queue.items { rememberNative(item) }
+        for item in queue.items { rememberQueueEvidence(item) }
         for index in deliveries.indices {
             guard let id = deliveries[index].queueItemID else { continue }
-            if let native = nativeItems[id]?.native {
+            if let native = queueEvidence[id]?.native {
                 deliveries[index].status = .native(native)
-            } else if let item = queue.items.first(where: { $0.id == id }), !item.deliveryUnknown.isEmpty {
+            } else if let item = queueEvidence[id], !item.deliveryUnknown.isEmpty {
                 deliveries[index].status = .unknown(item.deliveryUnknown)
             }
         }
     }
 
-    private func rememberNative(_ item: ArgoQueuedMessage) {
-        guard item.native != nil, !hiddenNativeIDs.contains(item.id) else { return }
+    private func rememberQueueEvidence(_ item: ArgoQueuedMessage) {
+        guard item.native != nil || !item.deliveryUnknown.isEmpty, !hiddenNativeIDs.contains(item.id) else { return }
+        // Old ordinary snapshots cannot erase a known native handoff.
+        if queueEvidence[item.id]?.native != nil, item.native == nil { return }
         // An explicit accepted receipt is stronger than an earlier pre-written
         // unknown snapshot. It still says nothing about model completion.
-        if nativeItems[item.id]?.native?.state == .accepted, item.native?.unrecognizedState == nil { return }
-        nativeItems[item.id] = item
+        if queueEvidence[item.id]?.native?.state == .accepted, item.native?.unrecognizedState == nil { return }
+        queueEvidence[item.id] = item
     }
 
     func nativeRecord(for item: ArgoQueuedMessage) -> ArgoQueuedMessage? {
         guard !hiddenNativeIDs.contains(item.id) else { return nil }
-        return nativeItems[item.id] ?? (item.native == nil ? nil : item)
+        let evidence = queueEvidence[item.id] ?? item
+        return evidence.native == nil ? nil : evidence
     }
 
     var nativeQueueItems: [ArgoQueuedMessage] { queue?.items.compactMap { nativeRecord(for: $0) } ?? [] }
@@ -311,7 +325,7 @@ final class ConversationState {
         guard let queue else { return 0 }
         guard let pending = queue.pending else { return ordinaryQueueItems.count }
         // A late ordinary snapshot cannot make a known native record sendable.
-        let stale = queue.items.filter { $0.native == nil && (nativeItems[$0.id] != nil || hiddenNativeIDs.contains($0.id)) }.count
+        let stale = queue.items.filter { $0.native == nil && (queueEvidence[$0.id]?.native != nil || hiddenNativeIDs.contains($0.id)) }.count
         return max(0, pending - stale)
     }
     var nativeHistoryCount: Int {
@@ -326,7 +340,7 @@ final class ConversationState {
 
     func didHideNativeRecord(_ id: String) {
         hiddenNativeIDs.insert(id)
-        nativeItems[id] = nil
+        queueEvidence[id] = nil
         deliveries.removeAll { $0.queueItemID == id }
     }
 

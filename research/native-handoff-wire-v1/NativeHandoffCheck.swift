@@ -12,6 +12,14 @@ private enum Scenario: String, CaseIterable, Sendable {
     case getBeforePost, acceptedBeforeUnknownPost, staleUnknownGET, futureAfterAccepted
     case background, lateSession, changedThread, restore, mixed
     case hide, hideFailure, hideLostACK, hideBeforePost, hideLateSession
+    case unboundUnknownRemoved, unboundAcceptedRemoved, unboundACKRemoved, unboundOldUnknownRemoved
+
+    var removesBeforeBinding: Bool {
+        switch self {
+        case .unboundUnknownRemoved, .unboundAcceptedRemoved, .unboundACKRemoved, .unboundOldUnknownRemoved: true
+        default: false
+        }
+    }
 }
 
 // The transport is the external boundary. No product delivery/queue algorithm
@@ -36,8 +44,8 @@ private actor NativeTransport: ArgoHTTPTransport {
     init(_ scenario: Scenario) {
         self.scenario = scenario
         switch scenario {
-        case .queuedToAccepted, .queuedToUnknown, .getBeforePost: nativeState = nil
-        case .unknown, .acceptedBeforeUnknownPost: nativeState = "unknown"
+        case .queuedToAccepted, .queuedToUnknown, .getBeforePost, .unboundUnknownRemoved, .unboundAcceptedRemoved: nativeState = nil
+        case .unknown, .acceptedBeforeUnknownPost, .unboundOldUnknownRemoved: nativeState = "unknown"
         case .future: nativeState = "v2-unrecognized"
         default: nativeState = "accepted"
         }
@@ -45,6 +53,7 @@ private actor NativeTransport: ArgoHTTPTransport {
     func loomdToken() async throws -> String { String(repeating: "a", count: 64) }
     func close() async {}
     func updateNative(_ state: String) { nativeState = state }
+    func removeQueueRecord() { hidden = true }
     func changeThread() { currentThread = "native-r1-new" }
     func writeTranscript() { transcriptWritten = true }
     func releasePost() { if let postResponse { postWaiter?.resume(returning: postResponse) }; postWaiter = nil }
@@ -83,7 +92,7 @@ private actor NativeTransport: ArgoHTTPTransport {
                   request.headers.contains(where: { $0.0 == "X-Loom-Attempt" && ArgoAttempt.valid($0.1) }) else { throw Failure("original text/target/attempt changed") }
             published = true
             let response = try json(["delivered": false, "item": item(), "queue": queue("r1")])
-            if [.getBeforePost, .acceptedBeforeUnknownPost, .background, .lateSession, .hideBeforePost].contains(scenario) {
+            if scenario.removesBeforeBinding || [.getBeforePost, .acceptedBeforeUnknownPost, .background, .lateSession, .hideBeforePost].contains(scenario) {
                 postResponse = response
                 return await withCheckedContinuation { postWaiter = $0 }
             }
@@ -162,6 +171,37 @@ private actor NativeTransport: ArgoHTTPTransport {
     let state = model.conversation!
     state.draft = transport.text
     model.sendDraft(for: key)
+
+    if scenario.removesBeforeBinding {
+        try await eventually("unbound POST pending") { await transport.waitingForPost }
+        await transport.updateNative([.unboundUnknownRemoved, .unboundACKRemoved].contains(scenario) ? "unknown" : "accepted")
+        model.refreshConversation()
+        try await eventually("native GET before binding") { state.nativeQueueItems.count == 1 }
+        try expect(state.deliveries.first?.queueItemID == nil, "fixture bound item ID too early")
+        let originalItem = state.nativeQueueItems[0]
+        await transport.removeQueueRecord()
+        model.refreshConversation()
+        try await eventually("removed before binding") { state.queue?.items.isEmpty == true }
+        await transport.releasePost()
+        try await eventually("unbound POST finished") { state.deliveries.first?.status != .sending }
+        model.refreshConversation()
+        try await eventually("removed after binding") { state.queue?.items.isEmpty == true }
+        let receipt = state.deliveries[0]
+        guard case .native(let native) = receipt.status else { throw Failure("native evidence erased before binding") }
+        try expect(native.state == (scenario == .unboundUnknownRemoved ? .unknown : .accepted), "removed native evidence lost ACK precedence")
+        try expect(!receipt.status.canRetry && !receipt.status.isKnownSuccess && receipt.queueItemID == originalItem.id, "removed native evidence became sendable/success or changed ID")
+        let post = await transport.posts[0]
+        try expect(post.headers.first(where: { $0.0 == "X-Loom-Attempt" })?.1 == receipt.operation.attempt && receipt.id == receipt.operation.attempt, "removed native evidence changed attempt")
+        if case .message(let original) = receipt.operation {
+            try expect(original.target == originalItem.target && original.text == originalItem.text, "removed native evidence changed original text/target")
+        }
+        try expect(state.transcript.items.isEmpty && state.deliveryReceipts.count == 1 && state.pendingQueueCount == 0, "removed evidence projected another message or queued count")
+        model.retry(receipt)
+        try await Task.sleep(for: .milliseconds(20))
+        try expect(await transport.posts.count == 1, "removed native evidence caused another POST")
+        print("PASS \(scenario.rawValue): GET native, GET empty, late POST, one original receipt/write")
+        return
+    }
 
     if [.getBeforePost, .acceptedBeforeUnknownPost, .background, .lateSession, .hideBeforePost].contains(scenario) {
         try await eventually("POST pending") { await transport.waitingForPost }

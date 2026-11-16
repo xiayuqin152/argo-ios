@@ -9,7 +9,7 @@ private struct CheckFailure: Error, CustomStringConvertible {
 
 private enum Outcome: String, CaseIterable, Sendable {
     case delivered, queued, held, notSent, rejected, serverUnknown, lostReceipt, cancelledAfterWrite, malformed, lateResult
-    case nativeUnknown, ptyUnknown, queuedThenUnknown, unrelatedUnknown, lateUnknown, backgroundUnknown, staleQueuedReceipt
+    case unboundUnknownRemoved, nativeUnknown, ptyUnknown, queuedThenUnknown, unrelatedUnknown, lateUnknown, backgroundUnknown, staleQueuedReceipt
     case replySent, replyRejected, replyUnknown, replyWrongID, replyNotSent
     var isReply: Bool { rawValue.hasPrefix("reply") }
 }
@@ -76,10 +76,10 @@ private actor DeliveryTransport: ArgoHTTPTransport {
             }
             if [.notSent, .replyNotSent].contains(outcome), requests.count == 1 { throw TransportFailure.notSent("synthetic before-write failure") }
             if [.rejected, .replyRejected].contains(outcome) { return try json(["error": "目标已变化，没有写入", "code": "target_changed"], status: 409) }
-            if [.queued, .held, .queuedThenUnknown, .unrelatedUnknown, .staleQueuedReceipt].contains(outcome) {
+            if [.queued, .held, .queuedThenUnknown, .unrelatedUnknown, .staleQueuedReceipt, .unboundUnknownRemoved].contains(outcome) {
                 pending = true
                 let response = try json(["delivered": false, "item": item(), "queue": queue(run: "r1")])
-                if outcome == .staleQueuedReceipt {
+                if [.staleQueuedReceipt, .unboundUnknownRemoved].contains(outcome) {
                     lateResponse = response
                     return await withCheckedContinuation { late = $0 }
                 }
@@ -201,16 +201,39 @@ private actor DeliveryTransport: ArgoHTTPTransport {
         model.setActive(true)
         try await eventually("Reconnect after suspension") { model.status.isConnected && state.canSendToIdentity }
     }
-    if outcome == .staleQueuedReceipt {
+    if [.staleQueuedReceipt, .unboundUnknownRemoved].contains(outcome) {
         try await eventually("Await delayed queued receipt") { await transport.waiting }
         await transport.markQueueUnknown()
         let reads = await transport.queueReads
         model.refreshConversation()
         try await eventually("Queue refresh precedes receipt") { await transport.queueReads > reads && state.queue?.hold.contains("未知") == true }
+        if outcome == .unboundUnknownRemoved {
+            // The desktop can remove this item while its original queued POST
+            // response is still in flight. Keep the GET evidence through that gap.
+            guard state.deliveries.last?.queueItemID == nil,
+                  state.queue?.items.first?.id == "fixture-item",
+                  state.queue?.items.first?.deliveryUnknown == transport.unknownReason else { throw CheckFailure("Fixture did not observe unknown before ID binding") }
+            await transport.removeQueueRecord()
+            let nextRead = await transport.queueReads
+            model.refreshConversation()
+            try await eventually("Read removal before receipt") { await transport.queueReads > nextRead && state.queue?.items.isEmpty == true }
+        }
         await transport.releaseLate()
     }
     try await eventually("Delivery finished") { state.deliveries.last?.status != .sending }
     guard let first = state.deliveries.last, first.operation.text == text else { throw CheckFailure("Operation text lost") }
+    if outcome == .unboundUnknownRemoved {
+        model.refreshConversation()
+        try await eventually("Empty queue after late receipt") { state.queue?.items.isEmpty == true }
+        guard let final = state.deliveries.last, final.id == first.id else { throw CheckFailure("Receipt ownership changed") }
+        model.retry(final)
+        try await Task.sleep(for: .milliseconds(20))
+        guard await transport.requests.count == 1 else { throw CheckFailure("Unsafe retry generated POST") }
+        print("OBSERVED unboundUnknownRemoved: status=\(final.status), boundID=\(final.queueItemID ?? "nil"), writes=\(await transport.requests.count), queueCount=\(state.queue?.items.count ?? -1)")
+        guard case .unknown = final.status else { throw CheckFailure("observed_unknown_erased_after_id_binding") }
+        print("PASS unboundUnknownRemoved: GET unknown, GET empty, late POST preserves warning")
+        return
+    }
     switch outcome {
     case .delivered, .lateResult: guard first.status == .delivered else { throw CheckFailure("Success not recorded") }
     case .replySent: guard first.status == .answered else { throw CheckFailure("Answer not recorded") }
