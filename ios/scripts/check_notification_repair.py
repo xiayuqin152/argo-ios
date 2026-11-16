@@ -16,7 +16,9 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ["pushB", "sameHostRun", "userB", "forget", "repair", "reconnect", "pairFailed", "pairRollback", "newerRoute", "missingAgent", "pairCancelEmpty", "pairCancelExisting",
          "pairCancelRepair", "pairBackgroundEmpty", "pairBackgroundExisting", "pairCancelBeforeSave", "pairCancelLate",
-         "pairBackgroundLate", "pairDuplicate", "pairForgetLate", "pairForgetDuringRestore", "pairNewFailed"]
+         "pairBackgroundLate", "pairDuplicate", "pairForgetLate", "pairForgetDuringRestore", "pairNewFailed",
+         "disabledDuringOpen", "rotatedDuringOpen", "disabledDuringAgents", "rotatedDuringAgents",
+         "disabledErrorDuringOpen", "currentDuringOpen", "cancelledDisableDuringOpen", "retiredBeforeOpen"]
 
 
 def main():

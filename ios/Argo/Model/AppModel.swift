@@ -270,7 +270,8 @@ final class AppModel {
     }
 
     func openNotification(_ route: ArgoPushRoute) {
-        guard hosts.contains(where: { $0.id == route.hostID && $0.deviceID == route.deviceID }) else { return }
+        guard PhoneNotifications.shared.trusted(route),
+              hosts.contains(where: { $0.id == route.hostID && $0.deviceID == route.deviceID }) else { return }
         notificationRoute = route
         notificationProblem = nil
         let sameHost = hostID == route.hostID
@@ -326,9 +327,10 @@ final class AppModel {
 
     private func validateNotificationRoute(_ route: ArgoPushRoute) -> Bool {
         guard notificationRoute == route else { return false }
-        // Re-pairing keeps the host UUID but replaces its device credential.
-        // A reconnect may resume a tap only while that pairing still owns it.
-        guard hostID == route.hostID, selectedHost?.deviceID == route.deviceID else {
+        // Pairing and notification registration can each change across a GET.
+        // Only the current registration may publish or resume this tap.
+        guard hostID == route.hostID, selectedHost?.deviceID == route.deviceID,
+              PhoneNotifications.shared.trusted(route) else {
             notificationRoute = nil
             return false
         }

@@ -12,6 +12,8 @@ private let originalText = "SYNTHETIC_NOTIFICATION_PENDING\n  原文🙂  "
 private let unknownReason = "synthetic notification pending result unknown"
 private enum Scenario: String {
     case pushB, sameHostRun, userB, forget, repair, reconnect, pairFailed, pairRollback, newerRoute, missingAgent
+    case disabledDuringOpen, rotatedDuringOpen, disabledDuringAgents, rotatedDuringAgents
+    case disabledErrorDuringOpen, currentDuringOpen, cancelledDisableDuringOpen, retiredBeforeOpen
     case pairCancelEmpty, pairCancelExisting, pairCancelRepair, pairBackgroundEmpty, pairBackgroundExisting
     case pairCancelBeforeSave, pairCancelLate, pairBackgroundLate, pairDuplicate, pairForgetLate, pairForgetDuringRestore, pairNewFailed
 
@@ -20,6 +22,14 @@ private enum Scenario: String {
         case .pairCancelEmpty, .pairCancelExisting, .pairCancelRepair, .pairBackgroundEmpty, .pairBackgroundExisting,
              .pairCancelBeforeSave, .pairCancelLate, .pairBackgroundLate, .pairDuplicate, .pairForgetLate,
              .pairForgetDuringRestore, .pairNewFailed: true
+        default: false
+        }
+    }
+
+    var checksRegistrationLifecycle: Bool {
+        switch self {
+        case .disabledDuringOpen, .rotatedDuringOpen, .disabledDuringAgents, .rotatedDuringAgents,
+             .disabledErrorDuringOpen, .currentDuringOpen, .cancelledDisableDuringOpen, .retiredBeforeOpen: true
         default: false
         }
     }
@@ -90,11 +100,16 @@ private final class Tokens: DeviceTokenStoring, @unchecked Sendable {
 private actor Network {
     let terminalUnknown: Bool
     private(set) var messages: [(UUID, HTTPRequest)] = []
+    private(set) var requests: [(UUID, HTTPRequest)] = []
     private(set) var fullReads: [UUID] = []
     private var unknownHosts: Set<UUID> = []
     private var pauseDirectory: UUID?
     private var directory: CheckedContinuation<HTTPResponse, Never>?
     private var directoryResponse: HTTPResponse?
+    private var pauseAgents: UUID?
+    private var agentDirectory: CheckedContinuation<HTTPResponse, Never>?
+    private var agentResponse: HTTPResponse?
+    private var cancelUnregister = false
     private var pauseFull: UUID?
     private var full: CheckedContinuation<HTTPResponse, Never>?
     private var fullResponse: HTTPResponse?
@@ -103,12 +118,21 @@ private actor Network {
     private(set) var fullCancelled = false
     private(set) var postCancelled = false
     var directoryWaiting: Bool { directory != nil }
+    var agentsWaiting: Bool { agentDirectory != nil }
     var fullWaiting: Bool { full != nil }
     var postWaiting: Bool { post != nil }
     init(terminalUnknown: Bool) { self.terminalUnknown = terminalUnknown }
     func holdDirectory(_ id: UUID) { pauseDirectory = id }
+    func holdAgents(_ id: UUID) { pauseAgents = id }
+    func cancelNextUnregister() { cancelUnregister = true }
     func holdFull(_ id: UUID) { pauseFull = id }
-    func releaseDirectory() { if let directoryResponse { directory?.resume(returning: directoryResponse) }; directory = nil; directoryResponse = nil }
+    func releaseDirectory(failing: Bool = false) {
+        if let directoryResponse {
+            directory?.resume(returning: failing ? HTTPResponse(status: 503, headers: [], body: Data(), reusable: true) : directoryResponse)
+        }
+        directory = nil; directoryResponse = nil
+    }
+    func releaseAgents() { if let agentResponse { agentDirectory?.resume(returning: agentResponse) }; agentDirectory = nil; agentResponse = nil }
     func releaseFull() { if let fullResponse { full?.resume(returning: fullResponse) }; full = nil; fullResponse = nil }
     func releasePost() { if let postResponse { post?.resume(returning: postResponse) }; post = nil; postResponse = nil }
     func count(_ id: UUID) -> Int { messages.filter { $0.0 == id }.count }
@@ -131,6 +155,7 @@ private actor Network {
                      body: try JSONSerialization.data(withJSONObject: object), reusable: true)
     }
     func send(_ request: HTTPRequest, host: LoomHost, credential: GatewayCredential, reuse: Bool) async throws -> HTTPResponse {
+        requests.append((host.id, request))
         try require(host.deviceID == credential.device, "Connection mixed host/credential ownership")
         let url = URLComponents(string: "http://synthetic.invalid" + request.target)!
         let path = url.path
@@ -139,10 +164,13 @@ private actor Network {
             try require(headers["x-argo-device-id"] == credential.device && headers["x-argo-device-token"] == credential.token,
                         "Notification registration crossed credential ownership")
             if request.method == "PUT" {
+                let body = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
+                let token = body["token"] as! String
                 return try json(["enabled": true, "hostID": host.id.uuidString, "deviceID": credential.device,
-                                 "registrationID": "registration-\(credential.device)"])
+                                 "registrationID": "registration-\(credential.device)-\(token.prefix(8))"])
             }
             try require(request.method == "DELETE", "Unexpected notification method")
+            if cancelUnregister { cancelUnregister = false; throw CancellationError() }
             return try json(["enabled": false])
         }
         if request.method == "POST" {
@@ -170,7 +198,14 @@ private actor Network {
             }
             return response
         }
-        if path == "/api/agents" { return try json((1...2).map { ["run": "r\($0)", "terminal": "t\($0)", "ws": "w1", "engine": "codex", "status": "active", "state": "working"] }) }
+        if path == "/api/agents" {
+            let response = try json((1...2).map { ["run": "r\($0)", "terminal": "t\($0)", "ws": "w1", "engine": "codex", "status": "active", "state": "working"] })
+            if pauseAgents == host.id {
+                pauseAgents = nil; agentResponse = response
+                return await withCheckedContinuation { agentDirectory = $0 }
+            }
+            return response
+        }
         if path == "/api/terminals" { return try json((1...2).map { ["id": "t\($0)", "ws": "w1", "alive": true, "agent": ["run": "r\($0)", "engine": "codex"]] as [String: Any] }) }
         if path.hasSuffix("/chat") {
             let run = path.contains("/t1/") ? "r1" : "r2"
@@ -544,11 +579,89 @@ private final class ConnectionCalls: @unchecked Sendable {
     func count(for id: UUID) -> Int { lock.lock(); defer { lock.unlock() }; return opened.filter { $0 == id }.count }
 }
 
+@MainActor private func checkRegistrationLifecycle(_ scenario: Scenario) async throws {
+    let f = try await Fixture(scenario)
+    defer { f.finish() }
+    // Keep drafts for the original, notification target and another host.
+    try await f.select(f.b, run: "r1")
+    let other = f.model.conversation!
+    other.draft = "SYNTHETIC other host draft"
+    try await f.select(f.a, run: "r2")
+    let target = f.model.conversation!
+    target.draft = "SYNTHETIC notification target draft"
+    try await f.select(f.a, run: "r1")
+    let original = f.model.conversation!
+    original.draft = "SYNTHETIC original draft\n  原文🙂  "
+    let originalDraft = original.draft
+    if scenario == .retiredBeforeOpen {
+        let route = try f.route(f.b, run: "r1")
+        await f.notifications.setEnabled(false, host: f.b)
+        try require(!f.notifications.trusted(route), "Fixture did not retire the other host's route")
+        // Exercise AppModel admission directly, beyond RootView's receipt check.
+        f.model.openNotification(route)
+        let posts = await f.network.requests.filter { $0.1.method == "POST" }.count
+        try require(f.model.hostID == f.a.id && f.model.selectedKey == f.key(f.a, run: "r1") &&
+                    original.draft == originalDraft && target.draft == "SYNTHETIC notification target draft" &&
+                    other.draft == "SYNTHETIC other host draft" && posts == 0,
+                    "Retired route selected another host, changed a draft or sent a POST")
+        print("PASS retiredBeforeOpen: retired registration rejected before host selection; drafts preserved; POST=0")
+        return
+    }
+    if let polling = task(f.model, label: "listTask") {
+        polling.cancel()
+        await polling.value
+    }
+    let route = try f.route(f.a, run: "r2")
+    let duringAgents = [.disabledDuringAgents, .rotatedDuringAgents].contains(scenario)
+    if duringAgents { await f.network.holdAgents(f.a.id) }
+    else { await f.network.holdDirectory(f.a.id) }
+    try f.tap(route)
+    try await eventually("Notification GET held") {
+        if duringAgents { return await f.network.agentsWaiting }
+        return await f.network.directoryWaiting
+    }
+    guard let pending = task(f.model, label: "notificationTask") else { throw Failure("Missing real notification Task") }
+    let stillCurrent = [.currentDuringOpen, .cancelledDisableDuringOpen].contains(scenario)
+    if [.rotatedDuringOpen, .rotatedDuringAgents].contains(scenario) {
+        f.notifications.didRegister(Data(repeating: 7, count: 32))
+        try await eventually("Replacement registration published") {
+            guard let receipt = f.notifications.registrations[f.a.id] else { return false }
+            return receipt.registrationID != route.registrationID
+        }
+    } else if scenario != .currentDuringOpen {
+        if scenario == .cancelledDisableDuringOpen { await f.network.cancelNextUnregister() }
+        await f.notifications.setEnabled(false, host: f.a)
+        if scenario == .cancelledDisableDuringOpen {
+            try require(f.notifications.problem(for: f.a.id) != nil, "Cancelled removal lost its retry error")
+        }
+    }
+    try require(f.notifications.trusted(route) == stillCurrent, "Fixture registration authority differs from scenario")
+    let before = await f.network.requests
+    if duringAgents { await f.network.releaseAgents() }
+    else { await f.network.releaseDirectory(failing: scenario == .disabledErrorDuringOpen) }
+    await pending.value
+    let requests = await f.network.requests
+    let posts = requests.filter { $0.1.method == "POST" }.count
+    let expected = f.key(f.a, run: stillCurrent ? "r2" : "r1")
+    print("OBSERVED \(scenario.rawValue): trusted=\(f.notifications.trusted(route)), selectedRun=\(f.model.selectedKey?.run ?? "nil"), originalDraftPreserved=\(original.draft == originalDraft), POST=\(posts)")
+    try require(f.model.hostID == f.a.id && f.model.selectedKey == expected &&
+                original.draft == originalDraft && target.draft == "SYNTHETIC notification target draft" &&
+                other.draft == "SYNTHETIC other host draft" && f.model.notificationProblem == nil && posts == 0,
+                "Late notification GET changed navigation, drafts, error or POST ownership")
+    if !stillCurrent && !duringAgents {
+        let agentReads = requests.filter { $0.1.target.hasPrefix("/api/agents?") }.count
+        let previousReads = before.filter { $0.1.target.hasPrefix("/api/agents?") }.count
+        try require(agentReads == previousReads, "Retired route started another directory GET")
+    }
+    print("PASS \(scenario.rawValue): current registration owns exact host/run; all drafts preserved; POST=0")
+}
+
 @main private struct NavigationCheck {
     @MainActor static func main() async {
         guard let argument = CommandLine.arguments.dropFirst().first, let scenario = Scenario(rawValue: argument) else { print("FAIL missing scenario"); exit(2) }
         do {
-            if scenario.checksPairingLifecycle { try await checkPairingLifecycle(scenario) }
+            if scenario.checksRegistrationLifecycle { try await checkRegistrationLifecycle(scenario) }
+            else if scenario.checksPairingLifecycle { try await checkPairingLifecycle(scenario) }
             else { try await check(scenario) }
         }
         catch { print("FAIL \(scenario.rawValue): \(error)"); exit(1) }
