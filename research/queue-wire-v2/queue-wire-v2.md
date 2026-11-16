@@ -113,3 +113,21 @@ with the existing target, revision and owner checks. Sources never become
 current send tasks and are not automatically resent. This extension requires a
 host containing `dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent
 fix, rather than merely an older queue-wire-v2 host.
+
+## Source-read diagnostics
+
+Queue responses and Agent cards may add an optional `nativeSourcesError` string
+when only some sources are readable. This bounded, redacted diagnostic does not
+replace the current `notice` or turn a successful current queue/receipt into an
+error. Current state, durable item/attempt receipts, readable sources and their
+counts remain valid. Those counts include only readable sources and can be
+incomplete; `nativeHistory` is not a complete-total guarantee. A source error
+never means that no history exists, even when its count is zero. A missing error
+field means no diagnostic was provided, not that history is complete.
+
+Current-queue permission, version and read failures, and source full-item/hide
+failures, keep their original error responses. Cancellation stops subsequent
+source scans; synchronous lock waits and reads already in progress are not
+guaranteed to interrupt immediately. This diagnostic requires
+`e078c23ee4d44fe5eddeea0d41ee04e6fc0aebc7` or the equivalent fix. No
+ordinary-PTY source or recovery extension is defined here.

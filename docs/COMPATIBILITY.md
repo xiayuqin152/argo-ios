@@ -43,6 +43,19 @@ They must not automatically resend a source item. This requires a host containin
 `dcd3d67d56fccebe273a82d3b72527356c1027dc` or the equivalent fix; running-host
 support still needs separate validation.
 
+When only some sources are readable, queue responses and Agent cards may include
+an optional `nativeSourcesError` string. This is a partial source-read diagnostic,
+not an error for the current queue or receipt. Current state, successful
+item/attempt receipts, readable sources and their counts remain valid, and the
+current `notice` is not replaced. Those counts can be incomplete, so
+`nativeHistory` is not a complete-total guarantee. A source error never means
+that no history exists, even when the count is zero. A missing error field means
+no diagnostic was provided, not that history is complete. Current-queue
+permission, version and read failures, and source full-item/hide failures, keep
+their original error responses instead of becoming this diagnostic. Reporting
+it requires `e078c23ee4d44fe5eddeea0d41ee04e6fc0aebc7` or the equivalent fix.
+No ordinary-PTY source or recovery extension is defined by this contract.
+
 | Capability | Client request | Required host contract |
 | --- | --- | --- |
 | Queue preview | `GET /api/agents/{run}/queue?bounded=1` | Root `bounded:true`, `byteLimit:8388608`; the entire encoded JSON body, including its final newline, is strictly smaller than 8,388,608 bytes (8 MiB). |
