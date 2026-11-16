@@ -261,8 +261,8 @@ final class AppModel {
     /// A tap resolves the current directory through GETs. No payload may
     /// manufacture a card, start/resume a run, or send a conversation POST.
     private func resolveNotification() {
-        guard active, status.isConnected, let connection, let route = notificationRoute,
-              hostID == route.hostID else { return }
+        guard let route = notificationRoute, validateNotificationRoute(route),
+              active, status.isConnected, let connection else { return }
         notificationTask?.cancel()
         let epoch = hostEpoch
         let navigationWorkspace = workspaceEpoch
@@ -271,12 +271,17 @@ final class AppModel {
             guard let self else { return }
             do {
                 let catalog = try await connection.workspaces()
+                guard isCurrentHost(epoch), validateNotificationRoute(route) else { return }
+                guard workspaceEpoch == navigationWorkspace, chatEpoch == navigationChat else {
+                    notificationRoute = nil
+                    return
+                }
                 guard catalog.contains(where: { $0.id == route.workspace }) else {
                     throw ArgoClientError.refusedLocally(.message("This notification's workspace is no longer available."))
                 }
                 let cards = try await connection.agents(workspace: route.workspace)
                 try Task.checkCancellation()
-                guard isCurrentHost(epoch), notificationRoute == route else { return }
+                guard isCurrentHost(epoch), validateNotificationRoute(route) else { return }
                 guard workspaceEpoch == navigationWorkspace, chatEpoch == navigationChat else {
                     notificationRoute = nil
                     return
@@ -290,12 +295,23 @@ final class AppModel {
                 notificationRoute = nil
                 selectSession(key(for: card))
             } catch {
-                guard !Task.isCancelled, isCurrentHost(epoch), notificationRoute == route else { return }
+                guard isCurrentHost(epoch), validateNotificationRoute(route) else { return }
                 notificationRoute = nil
                 guard workspaceEpoch == navigationWorkspace, chatEpoch == navigationChat else { return }
                 notificationProblem = L10n.error(error)
             }
         }
+    }
+
+    private func validateNotificationRoute(_ route: ArgoPushRoute) -> Bool {
+        guard notificationRoute == route else { return false }
+        // Re-pairing keeps the host UUID but replaces its device credential.
+        // A reconnect may resume a tap only while that pairing still owns it.
+        guard hostID == route.hostID, selectedHost?.deviceID == route.deviceID else {
+            notificationRoute = nil
+            return false
+        }
+        return true
     }
 
     func key(for card: ArgoAgentCard) -> SessionKey? {
