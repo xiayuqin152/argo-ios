@@ -10,7 +10,7 @@ private struct CheckFailure: Error, CustomStringConvertible {
 }
 
 private enum Outcome: String, CaseIterable, Sendable {
-    case delivered, queued, held, notSent, rejected, serverUnknown, lostReceipt, cancelledAfterWrite, malformed, lateResult
+    case delivered, queued, held, notSent, rejected, queueConflictUnknown, serverUnknown, lostReceipt, cancelledAfterWrite, malformed, lateResult
     case unboundUnknownRemoved, nativeUnknown, ptyUnknown, queuedThenUnknown, unrelatedUnknown, lateUnknown, backgroundUnknown, staleQueuedReceipt
     case replySent, replyRejected, replyUnknown, replyWrongID, replyNotSent
     case composerNativeSwitch
@@ -93,7 +93,10 @@ private actor DeliveryTransport: ArgoHTTPTransport {
                       body["when"] as? String == "auto" else { throw CheckFailure("Message target or queue contract changed") }
             }
             if [.notSent, .replyNotSent].contains(outcome), requests.count == 1 { throw TransportFailure.notSent("synthetic before-write failure") }
-            if [.rejected, .replyRejected].contains(outcome) { return try json(["error": "目标已变化，没有写入", "code": "target_changed"], status: 409) }
+            if outcome == .rejected { return try json(["error": "synthetic access denied", "code": "denied"], status: 403) }
+            // A matching native GET after a conflict is not a delivery receipt.
+            if outcome == .queueConflictUnknown { native.append(text) }
+            if [.queueConflictUnknown, .replyRejected].contains(outcome) { return try json(["error": "目标已变化，没有写入", "code": "target_changed"], status: 409) }
             if [.queued, .held, .queuedThenUnknown, .unrelatedUnknown, .staleQueuedReceipt, .unboundUnknownRemoved].contains(outcome) {
                 pending = true
                 let response = try json(["delivered": false, "item": item(), "queue": queue(run: "r1")])
@@ -303,11 +306,23 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     }
     if outcome == .queued { await transport.deliverQueued() }
     if outcome == .queuedThenUnknown { await transport.markQueueUnknown() }
+    let queueReadsBeforeRefresh = await transport.queueReads
     model.refreshConversation()
     let expected = [.held, .rejected, .replyRejected, .unrelatedUnknown].contains(outcome) ? 0 : 1
     try await eventually("Native readback count") { state.transcript.items.count == expected && !state.loading }
     guard await transport.nativeCount == expected, state.transcript.items.allSatisfy({ $0.role == "user" && $0.text == text }),
           state.transcript.identity?.session == "native-r1" else { throw CheckFailure("Native text/identity/count mismatch") }
+    if outcome == .queueConflictUnknown {
+        try await eventually("Queue conflict read-only refresh") { await transport.queueReads > queueReadsBeforeRefresh }
+        guard let refreshed = state.deliveries.last, refreshed.id == first.id,
+              case .unknown(let reason) = refreshed.status, reason.contains("目标已变化，没有写入"),
+              !refreshed.status.canRetry, !refreshed.status.isKnownSuccess,
+              state.deliveries.count == 1, state.draft.isEmpty,
+              case .message(let original) = first.operation, case .message(let retained) = refreshed.operation,
+              retained.text == original.text, retained.target == original.target, retained.attempt == original.attempt,
+              await transport.requests.count == 1 else { throw CheckFailure("Queue conflict refresh changed the unknown receipt or submitted another POST") }
+        print("OBSERVED queueConflictUnknown: unknown retained after queue GET; original text/target/attempt, canRetry=false, writes=1")
+    }
     if let ask, [.replyUnknown, .replyWrongID].contains(outcome) {
         guard !state.canReply(to: ask), !state.hasAnswered(ask) else { throw CheckFailure("Unknown reply unlocked question or marked it answered") }
     }
