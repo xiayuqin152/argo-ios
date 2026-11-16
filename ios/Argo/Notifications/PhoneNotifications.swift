@@ -25,6 +25,8 @@ final class PhoneNotifications {
     @ObservationIgnored private var token: String?
     @ObservationIgnored private var last: Task<Void, Never>?
     @ObservationIgnored private var pairingHosts: [UUID: Int] = [:]
+    @ObservationIgnored private var authorizationGeneration = 0
+    @ObservationIgnored private var hasAuthorizationSnapshot = false
     private static let enabledKey = "argo.push.enabledHosts.v1"
     private static let registrationsKey = "argo.push.registrations.v1"
     private static let registrationOwnerKey = "argo.push.registrationOwner.v1"
@@ -62,7 +64,7 @@ final class PhoneNotifications {
     }
 
     func refresh() async {
-        authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        guard await readAuthorization() else { return }
         if Self.allowed(authorization) { authorizationProblem = nil }
         else if authorization == .denied, !enabledHosts.isEmpty {
             authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
@@ -81,11 +83,10 @@ final class PhoneNotifications {
         busy = true; defer { busy = false }
         do {
             if enabled {
-                let granted: Bool
-                do { granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
+                do { _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
                 catch { authorizationProblem = L10n.error(error); return }
-                authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-                guard granted else {
+                guard await readAuthorization() else { return }
+                guard Self.allowed(authorization) else {
                     authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
                     return
                 }
@@ -172,7 +173,9 @@ final class PhoneNotifications {
     }
 
     private func isCurrentRegistration(_ route: ArgoPushRoute) -> Bool {
-        guard let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID) else { return false }
+        // A cold-start alert may arrive before the first settings result.
+        guard !hasAuthorizationSnapshot || Self.allowed(authorization),
+              let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID) else { return false }
         return receipt.enabled && receipt.hostID == route.hostID &&
             receipt.deviceID == route.deviceID && receipt.registrationID == route.registrationID
     }
@@ -180,12 +183,12 @@ final class PhoneNotifications {
     func takeRoute(hosts: [LoomHost]) -> ArgoPushRoute? {
         guard let route = pendingRoute else { return nil }
         pendingRoute = nil
-        guard let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID), route.matches(receipt, hosts: hosts) else { return nil }
+        guard isCurrentRegistration(route), let receipt = registrations[route.hostID], route.matches(receipt, hosts: hosts) else { return nil }
         return route
     }
 
     func trusted(_ route: ArgoPushRoute) -> Bool {
-        guard let receipt = registrations[route.hostID], enabledHosts.contains(route.hostID) else { return false }
+        guard isCurrentRegistration(route), let receipt = registrations[route.hostID] else { return false }
         return route.matches(receipt, hosts: hosts)
     }
 
@@ -211,19 +214,22 @@ final class PhoneNotifications {
         for host in currentHosts where enabledHosts.contains(host.id) && pairingHosts[host.id] == nil {
             do {
                 let credential = try await store.credential(for: host)
-                guard token == self.token, enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
+                guard Self.allowed(authorization), token == self.token,
+                      enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
                 let client = try makeConnection(host, credential)
                 let receipt: ArgoPushRegistration
                 do { receipt = try await client.registerNotifications(token: token, environment: environment, topic: topic, credential: credential) }
                 catch { await client.close(); throw error }
                 await client.close()
-                guard token == self.token, enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
+                guard Self.allowed(authorization), token == self.token,
+                      enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
                 // Host metadata and the secret may change while the PUT is in flight.
                 // Validate both again before accepting its receipt for this UUID.
                 guard try await store.credential(for: host) == credential else {
                     throw ArgoClientError.needsPairing(.message("This host was removed or paired again. Select the host again."))
                 }
-                guard token == self.token, enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
+                guard Self.allowed(authorization), token == self.token,
+                      enabledHosts.contains(host.id), pairingHosts[host.id] == nil else { continue }
                 if registrations[host.id] != receipt { clearNotifications(registrations[host.id]) }
                 registrations[host.id] = receipt; save()
                 hostProblems.removeValue(forKey: host.id)
@@ -300,6 +306,17 @@ final class PhoneNotifications {
                   route.registrationID == registration.registrationID else { return nil }
             return identifier
         }
+    }
+
+    private func readAuthorization() async -> Bool {
+        authorizationGeneration += 1
+        let generation = authorizationGeneration
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        // Foreground, host refresh and the enable prompt can overlap.
+        guard generation == authorizationGeneration else { return false }
+        authorization = settings.authorizationStatus
+        hasAuthorizationSnapshot = true
+        return true
     }
 
     private static func allowed(_ status: UNAuthorizationStatus) -> Bool {

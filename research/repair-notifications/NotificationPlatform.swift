@@ -15,8 +15,27 @@ struct UNNotification { let request: UNNotificationRequest }
 @MainActor final class UNUserNotificationCenter {
     private static let instance = UNUserNotificationCenter()
     static func current() -> UNUserNotificationCenter { instance }
-    func notificationSettings() async -> UNNotificationSettings { .init(authorizationStatus: .authorized) }
-    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool { true }
+    var status = UNAuthorizationStatus.authorized
+    var granted = true
+    var holdNextSettings = false
+    private var settings: CheckedContinuation<UNNotificationSettings, Never>?
+    private var snapshot: UNAuthorizationStatus?
+    private(set) var settingsCalls = 0
+    var holdingSettings: Bool { settings != nil }
+    func releaseSettings() {
+        if let snapshot { settings?.resume(returning: .init(authorizationStatus: snapshot)) }
+        settings = nil; snapshot = nil
+    }
+    func notificationSettings() async -> UNNotificationSettings {
+        settingsCalls += 1
+        let value = status
+        if holdNextSettings {
+            holdNextSettings = false; snapshot = value
+            return await withCheckedContinuation { settings = $0 }
+        }
+        return .init(authorizationStatus: value)
+    }
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool { granted }
     func getDeliveredNotifications(_ completion: ([UNNotification]) -> Void) { completion([]) }
     func getPendingNotificationRequests(_ completion: ([UNNotificationRequest]) -> Void) { completion([]) }
     func removeDeliveredNotifications(withIdentifiers: [String]) {}
@@ -25,7 +44,8 @@ struct UNNotification { let request: UNNotificationRequest }
 
 @MainActor final class UIApplication {
     static let shared = UIApplication()
-    func registerForRemoteNotifications() {}
+    private(set) var registrations = 0
+    func registerForRemoteNotifications() { registrations += 1 }
 }
 
 @MainActor enum NotificationTestPlatform {
