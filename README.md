@@ -14,7 +14,7 @@ Argo's companion for iPhone and iPad: follow your coding sessions, read progress
 - Read and reply to connected **managed** sessions, including supported Agent questions. Historical, manual or unattached sessions are read only.
 - See working, waiting, finished and error states. Sending shows the host's delivery or queue receipt; refresh to check an unknown result before sending again.
 - Queue previews and full-message reads require an Argo host upgraded to the [bounded queue and full-item contract](research/queue-wire-v2/queue-wire-v2.md).
-- Expand the message field for long text. Return inserts a line break by default; **Settings → Return Key Sends** enables Return to send, with Shift-Return for a line break.
+- Expand the message field for long text. Return inserts a line break by default; **Settings → Return Key Sends** enables Return to send, with Shift- or Option-Return for a line break.
 - Attach photos or files and open managed previews. The system **Paste Image** button imports images when you tap it.
 
 ## Pair
@@ -27,7 +27,7 @@ argo pair
 
 In the app, scan its QR code, tap **Paste Pairing Code**, or enter the complete `argo1:` code. A code is single-use and expires after 10 minutes. Scanning needs camera permission and a supported device; paste and manual entry remain available. Allow local-network access when prompted, and make sure the phone can reach the host.
 
-The host must provide the bounded 1 MiB chat contract. Phone alerts additionally require `PUT/DELETE /api/notify/device`. Verified Argo source master `56b03830908811c8cc1675675bbdd59127303b5f` includes combined backend revision `eba473a09100b11b2f6ea0cf77ab5817f50f6608`. The running service has not been deployed from this source. See the exact [host requirements](ios/README.md#host-compatibility). This repository contains the phone client.
+The host must provide the bounded 1 MiB chat contract. Phone alerts additionally require `PUT/DELETE /api/notify/device`. The verified host compatibility baseline is `aca842c00138878244d1f8f928723b96d9e17886` in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44), including the bounded queue/full-item, persistent attempt, nativeSources, ordinary PTY unknown and nativeSourcesError contracts. PR#44 still awaits desktop `unknown` and CS1 fixes; [iOS PR#3](https://github.com/xiayuqin152/argo-ios/pull/3) has a separate notification-route repair pending. The running service has not been deployed from this source; a released minimum host version has not been specified. See the exact [host requirements](ios/README.md#host-compatibility). This repository contains the phone client.
 
 ## Phone alerts
 
@@ -37,7 +37,7 @@ Signing, actual APNs delivery and background receipt on a device await validatio
 
 ## Build and installation
 
-The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) runs the Core tests with the selected Xcode, then creates a Release iPhoneOS archive and unsigned IPA. Open a successful run for its commit, artifacts and logs.
+The app targets iOS 26+, with the `Argo` scheme in [ios/Argo.xcodeproj](ios/Argo.xcodeproj). [GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) runs Core tests with the selected Xcode, creates a Release iPhoneOS archive and unsigned IPA, then runs native UIKit input tests on an available iOS Simulator. It preserves the archive and UIKit test xcresult bundles. Use this cloud workflow if you do not have Xcode locally; open a successful run for its commit, artifacts and logs.
 
 The workflow's **unsigned IPA cannot be installed directly**. Device installation requires an Apple Developer account, a suitable certificate and provisioning profile. Signed IPA, TestFlight and App Store distribution are not configured. See [build instructions and current validation](ios/README.md).
 

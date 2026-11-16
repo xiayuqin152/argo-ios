@@ -14,7 +14,7 @@ Argo 的 iPhone / iPad 手机伴侣：在手机上跟进编程会话、阅读进
 - 已接通的 **managed 会话支持读写**，可正常回复和回答支持的问题；历史、manual 或未接入的会话保持只读。
 - 查看工作中、等待回复、完成和错误状态。发送后展示主机的投递/排队回执；结果未知时先刷新确认，再决定是否另发。
 - 新版队列预览和全文读取需要将 Argo 主机升级到支持[有界队列与单条全文契约](research/queue-wire-v2/queue-wire-v2.md)的后端。
-- 展开输入框编辑长文本。Return 默认换行；在**设置 → 按回车发送**中开启后，Return 发送、Shift-Return 换行。
+- 展开输入框编辑长文本。Return 默认换行；在**设置 → 按回车发送**中开启后，Return 发送，Shift/Option-Return 换行。
 - 附加照片或文件，并打开受管预览；主动点击系统 **Paste Image / 粘贴图片**按钮导入图片。
 
 ## 配对
@@ -27,7 +27,7 @@ argo pair
 
 在 App 中扫描二维码、点击**粘贴配对码**，或手动输入完整的 `argo1:` 码。配对码有效期为 10 分钟，只能使用一次。扫码需相机权限和受支持设备；粘贴与手动输入持续可用。手机须能访问该主机，连接局域网时按提示允许本地网络访问。
 
-主机须支持有界 1 MiB 聊天契约，手机提醒还需要 `PUT/DELETE /api/notify/device`。已核对的 Argo 源码主线 `56b03830908811c8cc1675675bbdd59127303b5f` 已包含后端组合 `eba473a09100b11b2f6ea0cf77ab5817f50f6608`。运行服务尚未部署此源码。准确状态见[主机兼容要求](ios/README.md#host-compatibility)。本仓库提供手机客户端。
+主机须支持有界 1 MiB 聊天契约，手机提醒还需要 `PUT/DELETE /api/notify/device`。已核验的主机兼容基线为 [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44) 的 `aca842c00138878244d1f8f928723b96d9e17886`，包含有界队列/全文、持久 attempt、恢复来源、普通 PTY unknown 和来源错误诊断契约。PR#44 的桌面端 `unknown` 和 CS1 修复仍待收尾；[iOS PR#3](https://github.com/xiayuqin152/argo-ios/pull/3) 另有通知路由修复待完成。运行服务尚未部署此源码，也尚未指定已发布的最低主机版本。准确状态见[主机兼容要求](ios/README.md#host-compatibility)。本仓库提供手机客户端。
 
 ## 手机提醒
 
@@ -37,7 +37,7 @@ argo pair
 
 ## 构建与安装
 
-App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodeproj) 的 `Argo` scheme。[GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 使用所选 Xcode 执行 Core 测试，再生成 Release iPhoneOS archive 和 unsigned IPA。进入成功运行可查看对应提交、产物和日志。
+App 面向 iOS 26 及更新系统，使用 [ios/Argo.xcodeproj](ios/Argo.xcodeproj) 的 `Argo` scheme。[GitHub Actions](https://github.com/xiayuqin152/argo-ios/actions/workflows/ios-unsigned.yml) 使用所选 Xcode 执行 Core 测试、生成 Release iPhoneOS archive 和 unsigned IPA，随后在可用 iOS Simulator 上执行原生 UIKit 输入测试，保留归档和 UIKit 测试各自的 xcresult。本机没有完整 Xcode 时，可使用这条云构建路线；进入成功运行可查看对应提交、产物和日志。
 
 工作流产生的 **unsigned IPA 不能直接安装**。真机安装需要 Apple Developer 账号、适用证书和描述文件；当前未配置已签名 IPA、TestFlight 或 App Store 渠道。构建入口和验收状态见[构建说明](ios/README.md)。
 

@@ -7,20 +7,15 @@ raw-source `fileRefs`. These requirements are checked in the client; a legacy
 whole-record chat response is not accepted as a bounded page. The host must also
 carry the matching raw IPv6-zone and Unicode DNS pairing normalization.
 
-The previously verified Argo source master is
-`56b03830908811c8cc1675675bbdd59127303b5f`. It includes independently reviewed
-combined backend revision `eba473a09100b11b2f6ea0cf77ab5817f50f6608`;
-their source trees are identical. This includes bounded chat/fileRefs, pairing
-normalization and phone notification registration/APNs support. The running
-service has not been deployed from this source; a released minimum host version
-has not been specified. No server source or private server history is included
-in this phone client repository.
+The verified host compatibility baseline is
+`aca842c00138878244d1f8f928723b96d9e17886` in [Loom PR#44](https://github.com/xiayuqin152/loom/pull/44). It includes bounded chat/fileRefs, pairing normalization, phone notification registration/APNs support, bounded queue/full-item reads, persistent attempts, restored native sources and source-read diagnostics. PR#44 still awaits desktop `unknown` and CS1 fixes; [iOS PR#3](https://github.com/xiayuqin152/argo-ios/pull/3) has a separate notification-route repair pending. The running service has not been deployed from this source; a released minimum host version has not been specified. No server source or private server history is included in this phone client repository.
 
 This client additionally requires [queue-wire v2](../research/queue-wire-v2/queue-wire-v2.md).
 Upgrade the host code to provide bounded queue reads and send/hide receipts,
-plus read-only full-item reads alongside the existing contracts. The source
-verification above covers the older chat, pairing and notification combination;
-running-host queue-wire v2 support still needs validation.
+plus read-only full-item reads alongside the existing contracts. The verified
+baseline includes queue-wire v2; running-host support still needs validation.
+For the final combined source, record the verified backend SHA and the matching
+iOS cloud build result.
 
 Queue previews may shorten display text; viewing or copying incomplete content
 first reads the full item by its original ID. Native `accepted` acknowledges a
