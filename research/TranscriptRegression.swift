@@ -51,7 +51,7 @@ private actor TranscriptHost: ArgoHTTPTransport {
             let owner = manual ? #""unmanaged":{"engine":"claude","state":"working"}"# : #""agent":{"run":"20261115-101010-abcdef01","engine":"claude"}"#
             return .json(200, "[{\"id\":\"t1\",\"ws\":\"w1\",\"alive\":true," + owner + "}]")
         case "/api/agents/20261115-101010-abcdef01": return .json(200, Fixture.team)
-        case "/api/agents/20261115-101010-abcdef01/queue": return .json(200, #"{"run":"20261115-101010-abcdef01","items":[],"later":[]}"#)
+        case "/api/agents/20261115-101010-abcdef01/queue": return .json(200, #"{"bounded":true,"byteLimit":8388608,"run":"20261115-101010-abcdef01","items":[],"later":[]}"#)
         case "/api/terminals/t1/chat":
             // Capture before suspension: a cancelled old read can finish after a new read.
             let snapshot = phase
@@ -102,7 +102,14 @@ private actor TranscriptHost: ArgoHTTPTransport {
     model.selectSession(key)
     model.showConversation(key, visible: true)
     let state = model.conversation!
-    try await eventually("initial native page") { !state.loading && state.transcript.identity != nil }
+    // Managed polling publishes team and queue after the native page. Wait for
+    // both so a fixture setup error cannot satisfy a later error expectation.
+    try await eventually("initial native page and managed details") {
+        !state.loading && state.transcript.identity != nil &&
+            (manual || (state.team != nil && state.queue != nil))
+    }
+    try check(state.problem == nil, "initial conversation has a problem: \(state.problem ?? "")")
+    try check(state.transcript.identity?.run == (manual ? nil : key.run), "initial native owner does not match the selected session")
     state.draft = "unsent fixture draft"
     try await test(model, state, transport)
 }

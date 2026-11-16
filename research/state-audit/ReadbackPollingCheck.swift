@@ -81,7 +81,10 @@ private actor ReadbackTransport: ArgoHTTPTransport {
                              "items": [], "start": "0:0", "end": "0:0", "size": 0,
                              "older": false, "newer": false])
         }
-        if path.hasSuffix("/queue") { return try json(["run": "r1", "items": []]) }
+        if path.hasSuffix("/queue") {
+            return try json(["bounded": true, "byteLimit": 8_388_608,
+                             "run": String(path.split(separator: "/")[2]), "items": []])
+        }
         if path == "/api/agents/r1" || path == "/api/agents/r2" {
             return try json(["run": String(path.split(separator: "/").last!), "asks": []])
         }
