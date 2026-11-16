@@ -174,3 +174,9 @@ jobs:
           python3 research/mobile-delivery-221c/check_mobile_delivery.py \
             --swiftc "$(command -v swiftc)" --core-build "$core" \
             --output "$RUNNER_TEMP/mobile-delivery"
+          python3 ios/scripts/check_notification_repair.py \
+            --swiftc "$(command -v swiftc)" --core-build "$core/debug" \
+            --output "$RUNNER_TEMP/notification-repair"
+          python3 ios/scripts/check_notification_authorization.py \
+            --swiftc "$(command -v swiftc)" --core-build "$core/debug" \
+            --output "$RUNNER_TEMP/notification-authorization"
