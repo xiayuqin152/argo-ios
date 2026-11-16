@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile unchanged production models and run synthetic I/O boundary fixtures."""
+"""Compile checkout models and run synthetic I/O fixtures under output/runtime."""
 import argparse
 from pathlib import Path
 import shutil
@@ -29,8 +29,10 @@ with (a.output / "compile.log").open("w") as log:
     subprocess.run([swiftc, "-swift-version", "6", "-parse-as-library", "-j", "2", "-I", str(core / "Modules"),
                     *map(str, objects), *map(str, sources), str(a.fixture), "-o", str(binary)],
                    stdout=log, stderr=subprocess.STDOUT, check=True)
+runtime = a.output / "runtime"
+runtime.mkdir(exist_ok=True)
 with (a.output / "run.log").open("w") as log:
-    result = subprocess.run([str(binary)], cwd=root, stdout=log, stderr=subprocess.STDOUT)
+    result = subprocess.run([str(binary)], cwd=runtime, stdout=log, stderr=subprocess.STDOUT)
     log.write(f"exit={result.returncode}\n")
 output = (a.output / "run.log").read_text()
 print(output, end="")
