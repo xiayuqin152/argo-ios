@@ -1323,7 +1323,7 @@ final class AppModel {
                 if state.transcript.identity != nil || state.transcript.waiting != nil ||
                     state.team != nil || state.queue != nil || state.problem != nil ||
                     state.deliveries.contains(where: { $0.status.isKnownSuccess }) {
-                    state.releaseReloadableContent()
+                    state.releaseReloadableContent(inFlightDeliveryIDs: Set(sends.keys))
                 }
             } else {
                 remove.append(key)

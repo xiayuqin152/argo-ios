@@ -189,7 +189,8 @@ final class ConversationState {
     }
 
     /// Keep only user work and unresolved delivery evidence in a cold conversation.
-    func releaseReloadableContent() {
+    /// The caller supplies live request IDs; receipt status is not a task lifetime.
+    func releaseReloadableContent(inFlightDeliveryIDs: Set<String> = []) {
         transcript.reset()
         team = nil
         queue = nil
@@ -199,11 +200,8 @@ final class ConversationState {
         followingLatest = true
         deliveries.removeAll { $0.status.isKnownSuccess }
         let awaitingItemID = deliveries.contains { delivery in
-            guard delivery.queueItemID == nil, case .message = delivery.operation else { return false }
-            switch delivery.status {
-            case .sending, .unknown: return true
-            default: return false
-            }
+            guard case .message = delivery.operation else { return false }
+            return delivery.queueItemID == nil && inFlightDeliveryIDs.contains(delivery.id)
         }
         if !awaitingItemID {
             let retainedIDs = Set(deliveries.compactMap(\.queueItemID))

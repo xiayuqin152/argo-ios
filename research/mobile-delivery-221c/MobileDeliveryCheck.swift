@@ -22,6 +22,7 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     private(set) var requests: [HTTPRequest] = []
     private var native: [String] = []
     private var pending = false
+    private var evidenceGeneration = 0
     private var unknown = false
     private(set) var queueReads = 0
     let unknownReason = "synthetic acknowledgement lost after native acceptance"
@@ -37,6 +38,7 @@ private actor DeliveryTransport: ArgoHTTPTransport {
         late = nil; lateResponse = nil
     }
     func removeQueueRecord() { pending = false }
+    func replaceUnknownBatch(_ generation: Int) { evidenceGeneration = generation; pending = true; unknown = true }
     func markQueueUnknown() { unknown = true; if native.isEmpty { native.append(text) } }
     func deliverQueued() { if pending { native.append(text); pending = false } }
     private func json(_ value: Any, status: Int = 200) throws -> HTTPResponse {
@@ -50,6 +52,12 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     }
     private func queue(run: String) -> [String: Any] {
         var items: [[String: Any]] = run == "r1" && pending ? [item()] : []
+        if run == "r1", evidenceGeneration > 0 {
+            items = (1...20).map { n in
+                ["id": "unrelated-\(evidenceGeneration)-\(n)", "text": text,
+                 "deliveryUnknown": unknownReason] as [String: Any]
+            }
+        }
         if outcome == .unrelatedUnknown, pending, run == "r1" {
             // Same original text, different item: the unknown head must not taint our receipt.
             items.insert(["id": "other-item", "text": text, "deliveryUnknown": unknownReason], at: 0)
@@ -217,6 +225,9 @@ private actor DeliveryTransport: ArgoHTTPTransport {
             let nextRead = await transport.queueReads
             model.refreshConversation()
             try await eventually("Read removal before receipt") { await transport.queueReads > nextRead && state.queue?.items.isEmpty == true }
+            // This request is actually held at the transport boundary. A cold
+            // window must retain evidence until that attempt can bind its ID.
+            state.releaseReloadableContent(inFlightDeliveryIDs: [state.deliveries.last!.id])
         }
         await transport.releaseLate()
     }
@@ -317,6 +328,38 @@ private actor DeliveryTransport: ArgoHTTPTransport {
     }
     if outcome == .unrelatedUnknown {
         guard case .queued = state.deliveries.last?.status else { throw CheckFailure("Same-text other item contaminated receipt") }
+    }
+    if outcome == .lostReceipt {
+        let original = state.deliveries.last!
+        guard original.queueItemID == nil, case .unknown = original.status else {
+            throw CheckFailure("Fixture did not terminate the request without an item ID")
+        }
+        var ids: [String] = []
+        for generation in 1...8 {
+            await transport.replaceUnknownBatch(generation)
+            let reads = await transport.queueReads
+            model.refreshConversation()
+            try await eventually("Unrelated unknown batch") {
+                await transport.queueReads > reads && state.queue?.items.first?.id == "unrelated-\(generation)-1"
+            }
+            ids += (1...20).map { "unrelated-\(generation)-\($0)" }
+            state.releaseReloadableContent()
+            for id in ids {
+                let item = try JSONDecoder().decode(ArgoQueuedMessage.self, from: JSONSerialization.data(withJSONObject: ["id": id]))
+                guard state.deliveryUnknown(for: item) == nil else {
+                    throw CheckFailure("Terminal request retained unrelated evidence after cold cleanup")
+                }
+            }
+        }
+        guard state.deliveries.count == 1, let retained = state.deliveries.last,
+              retained.id == original.id, retained.queueItemID == nil, retained.status == original.status,
+              retained.operation.attempt == original.operation.attempt, retained.operation.text == text else {
+            throw CheckFailure("Cold cleanup changed the original unknown receipt")
+        }
+        model.retry(retained)
+        try await Task.sleep(for: .milliseconds(20))
+        guard await transport.requests.count == 1 else { throw CheckFailure("Cold cleanup enabled a resend") }
+        print("OBSERVED CE-1: 0/\(ids.count) unrelated evidence retained, original unknown/text/attempt unchanged, writes=1")
     }
     print("PASS \(outcome.rawValue): original text, target, native-count=\(expected), writes=\(await transport.requests.count)")
 }

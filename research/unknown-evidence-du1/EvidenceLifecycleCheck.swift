@@ -67,7 +67,7 @@ private func receipt(_ id: String = "same-id", kind: String? = nil, attempt: Str
                 state.queue = try queue()
                 // A cold state must keep evidence until the unresolved send can
                 // bind its server ID, without retaining its transcript window.
-                state.releaseReloadableContent()
+                state.releaseReloadableContent(inFlightDeliveryIDs: [originalAttempt])
                 try bind(state)
                 try requireEvidence(state, kind: kind)
                 try require(state.deliveries[0].id == originalAttempt, "binding replaced attempt")
