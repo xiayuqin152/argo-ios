@@ -26,7 +26,11 @@ final class PhoneNotifications {
     @ObservationIgnored private var last: Task<Void, Never>?
     @ObservationIgnored private var pairingHosts: [UUID: Int] = [:]
     @ObservationIgnored private var enableRequests: [UUID: UUID] = [:]
-    @ObservationIgnored private var authorizationGeneration = 0
+    private struct AuthorizationRead {
+        let id = UUID()
+        let result: Task<UNAuthorizationStatus, Never>
+    }
+    @ObservationIgnored private var authorizationRead: AuthorizationRead?
     @ObservationIgnored private var hasAuthorizationSnapshot = false
     private static let enabledKey = "argo.push.enabledHosts.v1"
     private static let registrationsKey = "argo.push.registrations.v1"
@@ -65,7 +69,9 @@ final class PhoneNotifications {
     }
 
     func refresh() async {
-        guard await readAuthorization() else { return }
+        let read = startAuthorizationRead()
+        let status = await read.result.value
+        guard publishAuthorization(status, from: read) else { return }
         if Self.allowed(authorization) { authorizationProblem = nil }
         else if authorization == .denied, !enabledHosts.isEmpty {
             authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
@@ -96,18 +102,28 @@ final class PhoneNotifications {
                     return
                 }
                 guard enableRequests[host.id] == request else { return }
-                // A newer settings query replaces the snapshot, not this intent.
-                _ = await readAuthorization()
-                guard enableRequests[host.id] == request else { return }
-                guard Self.allowed(authorization) else {
-                    authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
+                startAuthorizationRead()
+                // A newer query replaces the snapshot, not the user's intent.
+                // Follow its existing task; never re-query or decide from the
+                // cache while that current result is still pending.
+                while let read = authorizationRead {
+                    let status = await read.result.value
+                    let current = publishAuthorization(status, from: read)
+                    guard enableRequests[host.id] == request else { return }
+                    guard current else { continue }
+                    guard Self.allowed(status) else {
+                        authorizationProblem = L10n.text("Allow notifications in iOS Settings to receive Agent alerts.")
+                        return
+                    }
+                    // Snapshot validation and intent admission share this
+                    // MainActor turn, before the next suspension at sequence.
+                    authorizationProblem = nil
+                    // Save before PUT: even a lost receipt needs cleanup later.
+                    enabledHosts.insert(host.id); save()
+                    UIApplication.shared.registerForRemoteNotifications()
+                    try await sequence { [self] in try await synchronize() }
                     return
                 }
-                authorizationProblem = nil
-                // Persist intent before PUT: even a lost receipt must later be unregistered.
-                enabledHosts.insert(host.id); save()
-                UIApplication.shared.registerForRemoteNotifications()
-                try await sequence { [self] in try await synchronize() }
             } else {
                 try await sequence { [self] in try await unregister(host, keepIntent: false) }
             }
@@ -323,13 +339,20 @@ final class PhoneNotifications {
         }
     }
 
-    private func readAuthorization() async -> Bool {
-        authorizationGeneration += 1
-        let generation = authorizationGeneration
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        // Foreground, host refresh and the enable prompt can overlap.
-        guard generation == authorizationGeneration else { return false }
-        authorization = settings.authorizationStatus
+    @discardableResult
+    private func startAuthorizationRead() -> AuthorizationRead {
+        let read = AuthorizationRead(result: Task {
+            await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        })
+        authorizationRead = read
+        return read
+    }
+
+    private func publishAuthorization(_ status: UNAuthorizationStatus, from read: AuthorizationRead) -> Bool {
+        // Permission is global; its newest result remains useful even when the
+        // host action that requested it has since been cancelled.
+        guard read.id == authorizationRead?.id else { return false }
+        authorization = status
         hasAuthorizationSnapshot = true
         return true
     }

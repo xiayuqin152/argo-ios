@@ -19,7 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 CASES = ["deniedDuringPUT", "staleAuthorized", "staleDenied", "enableStaleAuthorized",
          "grantThenDenied", "deniedThenGranted", "deniedDuringDELETE", "undeterminedDuringDELETE", "deniedOffline", "coldReceipt",
          "currentAuthorized", "currentProvisional", "currentEphemeral", "enableCurrent", "disableThenRefresh",
-         "enableSupersededAllowed", "enableSupersededDenied", "enableThenDisable", "enableThenForget", "enableThenPairing"]
+         "enableSupersededAllowed", "enableSupersededDenied", "enableThenDisable", "enableThenForget", "enableThenPairing",
+         "firstGrantNewerFirstAllowedToken", "firstGrantNewerFirstDeniedToken", "firstGrantNewerLastAllowedToken", "firstGrantNewerLastDeniedToken",
+         "firstGrantNewerFirstAllowedNoToken", "firstGrantNewerFirstDeniedNoToken", "firstGrantNewerLastAllowedNoToken", "firstGrantNewerLastDeniedNoToken",
+         "waitingThenDisable", "waitingThenForget", "waitingThenPairing", "waitingThenReplacement",
+         "promptErrorOwnership", "promptReplacement", "promptThenDisable", "promptThenForget", "promptThenPairing", "cancelledEnableSnapshot"]
 
 
 def main():

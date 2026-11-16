@@ -132,14 +132,205 @@ private struct Transport: ArgoHTTPTransport {
         return route
     }
     func cleanup() async {
-        center.releaseSettings()
+        center.releaseAll()
         await boundary.releasePUT(); await boundary.releaseDELETE()
         try? FileManager.default.removeItem(at: directory)
     }
 }
 
-@MainActor private func run(_ name: String, _ f: Fixture) async throws {
+@MainActor private func requestIDs(_ f: Fixture) throws -> [UUID: UUID] {
+    guard let ids = Mirror(reflecting: f.notifications).children.first(where: { $0.label == "enableRequests" })?.value as? [UUID: UUID] else {
+        throw Failure(description: "Missing real enable request registry")
+    }
+    return ids
+}
+
+@MainActor private func deliverToken(_ f: Fixture) async throws {
+    f.notifications.didRegister(Data(repeating: 3, count: 32))
+    try await eventually("Token callback did not schedule registration") {
+        Mirror(reflecting: f.notifications).children.first(where: { $0.label == "last" })?.value as? Task<Void, Never> != nil
+    }
+    let last = Mirror(reflecting: f.notifications).children.first(where: { $0.label == "last" })!.value as! Task<Void, Never>
+    await last.value
+}
+
+@MainActor private func firstGrant(_ name: String, _ f: Fixture) async throws {
+    let newerFirst = name.contains("NewerFirst")
+    let allowed = name.contains("Allowed")
+    let withToken = !name.hasSuffix("NoToken")
+    f.center.status = .notDetermined
+    try await f.start(enabled: false, count: 1)
+    try require(f.notifications.authorization == .notDetermined, "Fixture must start with the pre-grant snapshot")
+    if withToken { try await deliverToken(f) }
+    let host = f.hosts[0]
+    let readsBefore = f.center.settingsCalls
+    let registerBefore = UIApplication.shared.registrations
+    f.center.grantStatus = .authorized
+    f.center.holdEverySettings = true
+    var enableFinished = false
+    let enable = Task { await f.notifications.setEnabled(true, host: host); enableFinished = true }
+    try await eventually("Enable query did not suspend") { f.center.queuedSettings.count == 1 }
+    f.center.status = allowed ? .authorized : .denied
+    let refresh = Task { await f.notifications.refresh() }
+    try await eventually("Newer query did not suspend") { f.center.queuedSettings.count == 2 }
+    var decidedBeforeCurrent = false
+    if newerFirst {
+        f.center.releaseQueuedSettings(1); await refresh.value
+        f.center.releaseQueuedSettings(0)
+    } else {
+        f.center.releaseQueuedSettings(0)
+        try await eventually("Older OS result did not return") { f.center.returnedSettings.contains(0) }
+        // Bounded observation while the newer OS callback is still held. This
+        // does not drive the product or release the newer query on a timer.
+        try await Task.sleep(for: .milliseconds(15))
+        decidedBeforeCurrent = enableFinished || f.notifications.problem(for: host.id) != nil ||
+            f.notifications.enabledHosts.contains(host.id)
+        f.center.releaseQueuedSettings(1)
+    }
+    await enable.value; await refresh.value
+    f.center.holdEverySettings = false
+    let enabled = f.notifications.enabledHosts.contains(host.id)
+    let saved = NotificationTestPlatform.defaults.stringArray(forKey: "argo.push.enabledHosts.v1")?.contains(host.id.uuidString) == true
+    let writes = await f.boundary.writes
+    let registerCalls = UIApplication.shared.registrations - registerBefore
+    print("OBSERVED \(name): authorization=\(f.notifications.authorization), enabled=\(enabled), saved=\(saved), receipt=\(f.notifications.registrations[host.id] != nil), earlyDecision=\(decidedBeforeCurrent), settings=\(f.center.settingsCalls-readsBefore), registerCalls=\(registerCalls)")
+    try require(!decidedBeforeCurrent, "Enable decided from the old cache before the current settings query completed")
+    try require(f.center.settingsCalls == readsBefore + 2, "Waiting retried or added a settings query")
+    try require(f.notifications.authorization == f.center.status && enabled == allowed && saved == allowed && !f.notifications.busy,
+                "Current permission did not determine the explicit enable intent")
+    if allowed {
+        try require(registerCalls > 0 && f.notifications.problem(for: host.id) == nil, "Allowed intent did not request system registration")
+        if !withToken {
+            try require(writes.isEmpty && f.notifications.registrations[host.id] == nil,
+                        "First grant required or manufactured a receipt before the token callback")
+            try await f.register()
+        }
+        let receipt = f.notifications.registrations[host.id]
+        try require(receipt?.hostID == host.id && receipt?.deviceID == host.deviceID, "Enabled host did not accept its token registration")
+    } else {
+        try require(writes.isEmpty && registerCalls == 0 && f.notifications.registrations.isEmpty &&
+                    f.notifications.problem(for: host.id) != nil, "Denied intent registered or hid the current rejection")
+    }
+}
+
+@MainActor private func waitingAction(_ name: String, _ f: Fixture) async throws {
+    f.center.status = .notDetermined
+    try await f.start(enabled: false, count: 1)
+    try await deliverToken(f)
+    let host = f.hosts[0]
+    f.center.grantStatus = .authorized
+    f.center.holdEverySettings = true
+    let old = Task { await f.notifications.setEnabled(true, host: host) }
+    try await eventually("Old enable query missing") { f.center.queuedSettings.count == 1 }
+    let refresh = Task { await f.notifications.refresh() }
+    try await eventually("Current query missing") { f.center.queuedSettings.count == 2 }
+    f.center.releaseQueuedSettings(0)
+    try await eventually("Old result not returned") { f.center.returnedSettings.contains(0) }
+    let originalID = try requestIDs(f)[host.id]
+    try require(originalID != nil, "Waiting enable lost its request identity")
+    var replacement: Task<Void, Never>?
     switch name {
+    case "waitingThenDisable": await f.notifications.setEnabled(false, host: host)
+    case "waitingThenForget": try await f.notifications.forgetHost(host.id)
+    case "waitingThenPairing": try await f.notifications.prepareForPairing(host.id)
+    case "waitingThenReplacement":
+        replacement = Task { await f.notifications.setEnabled(true, host: host) }
+        try await eventually("Replacement query missing") { f.center.queuedSettings.count == 3 }
+    default: throw Failure(description: "Unknown waiting action")
+    }
+    let currentID = try requestIDs(f)[host.id]
+    try require(currentID != originalID && (replacement != nil || currentID == nil), "New host action did not revoke old request")
+    f.center.releaseQueuedSettings(1)
+    await old.value; await refresh.value
+    if let replacement {
+        try require(try requestIDs(f)[host.id] == currentID, "Old defer removed replacement identity")
+        f.center.releaseQueuedSettings(2); await replacement.value
+    }
+    f.center.holdEverySettings = false
+    if name == "waitingThenPairing" { await f.notifications.restoreAfterPairing(host.id) }
+    let puts = await f.boundary.writes.filter { $0.method == "PUT" }
+    let expected = replacement != nil
+    try require(f.notifications.enabledHosts.contains(host.id) == expected &&
+                (f.notifications.registrations[host.id] != nil) == expected &&
+                puts.count == (expected ? 1 : 0) && f.notifications.problem(for: host.id) == nil &&
+                (try requestIDs(f)).isEmpty, "Late permission result reversed the current host action")
+    print("OBSERVED \(name): enabled=\(expected), PUT=\(puts.count), IDsCleared=true")
+}
+
+@MainActor private func promptAction(_ name: String, _ f: Fixture) async throws {
+    try await f.start(enabled: false, count: 1)
+    try await deliverToken(f)
+    let host = f.hosts[0]
+    f.center.holdRequests = true
+    let old = Task { await f.notifications.setEnabled(true, host: host) }
+    try await eventually("Permission request missing") { f.center.requests.count == 1 }
+    if name == "promptErrorOwnership" {
+        f.center.releaseRequest(0, error: true); await old.value
+        try require(f.notifications.problem(for: host.id)?.contains("synthetic authorization failure") == true &&
+                    !f.notifications.enabledHosts.contains(host.id) && (try requestIDs(f)).isEmpty,
+                    "Current permission error lost its ownership")
+        f.center.holdRequests = false
+        await f.notifications.setEnabled(true, host: host)
+        try require(f.notifications.problem(for: host.id) == nil && f.notifications.registrations[host.id] != nil,
+                    "Current error did not recover")
+        await f.notifications.setEnabled(false, host: host)
+        f.center.holdRequests = true
+        let stale = Task { await f.notifications.setEnabled(true, host: host) }
+        try await eventually("Stale request missing") { f.center.requests.count == 2 }
+        f.center.holdRequests = false
+        await f.notifications.setEnabled(true, host: host)
+        let receipt = f.notifications.registrations[host.id]
+        f.center.releaseRequest(1, error: true); await stale.value
+        try require(f.notifications.registrations[host.id] == receipt && receipt != nil &&
+                    f.notifications.problem(for: host.id) == nil && (try requestIDs(f)).isEmpty,
+                    "Stale permission error replaced current success")
+        return
+    }
+    if name == "promptReplacement" {
+        let oldID = try requestIDs(f)[host.id]
+        let newer = Task { await f.notifications.setEnabled(true, host: host) }
+        try await eventually("New request missing") { f.center.requests.count == 2 }
+        let newID = try requestIDs(f)[host.id]
+        f.center.releaseRequest(0, error: true); await old.value
+        try require(newID != nil && newID != oldID && (try requestIDs(f))[host.id] == newID &&
+                    f.notifications.problem(for: host.id) == nil, "Old error or defer changed the replacement")
+        f.center.releaseRequest(1); await newer.value
+        try require(f.notifications.registrations[host.id]?.deviceID == host.deviceID && (try requestIDs(f)).isEmpty,
+                    "Replacement did not complete with its own identity")
+        return
+    }
+    switch name {
+    case "promptThenDisable": await f.notifications.setEnabled(false, host: host)
+    case "promptThenForget": try await f.notifications.forgetHost(host.id)
+    case "promptThenPairing": try await f.notifications.prepareForPairing(host.id)
+    default: throw Failure(description: "Unknown prompt action")
+    }
+    try require(try requestIDs(f)[host.id] == nil, "Host action retained prompt request")
+    f.center.releaseRequest(0, error: name == "promptThenForget"); await old.value
+    let puts = await f.boundary.writes.filter { $0.method == "PUT" }
+    try require(puts.isEmpty && !f.notifications.enabledHosts.contains(host.id) &&
+                f.notifications.registrations[host.id] == nil && f.notifications.problem(for: host.id) == nil &&
+                (try requestIDs(f)).isEmpty, "Cancelled prompt changed intent, receipt or visible error")
+    if name == "promptThenPairing" { await f.notifications.restoreAfterPairing(host.id) }
+}
+
+@MainActor private func run(_ name: String, _ f: Fixture) async throws {
+    if name.hasPrefix("firstGrant") { try await firstGrant(name, f); return }
+    if name.hasPrefix("waitingThen") { try await waitingAction(name, f); return }
+    if name.hasPrefix("prompt") { try await promptAction(name, f); return }
+    switch name {
+    case "cancelledEnableSnapshot":
+        try await f.start(enabled: false, count: 1)
+        let host = f.hosts[0]
+        f.center.status = .denied
+        f.center.holdNextSettings = true
+        let enable = Task { await f.notifications.setEnabled(true, host: host) }
+        try await eventually("Enable settings did not suspend") { f.center.holdingSettings }
+        await f.notifications.setEnabled(false, host: host)
+        f.center.releaseSettings(); await enable.value
+        try require(f.notifications.authorization == .denied && f.notifications.enabledHosts.isEmpty &&
+                    f.notifications.registrations.isEmpty && f.notifications.problem(for: host.id) == nil,
+                    "Cancelling host action discarded a current global snapshot or published a stale action error")
     case "deniedDuringPUT":
         try await f.start()
         await f.boundary.pausePUT()
